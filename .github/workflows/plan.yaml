@@ -1,15 +1,14 @@
 name: Terraform Plan
 
 on:
-  push:
+  pull_request:
     branches:
       - main
-      - test-cicd
+  workflow_dispatch:
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
-
     permissions:
       id-token: write
       contents: read

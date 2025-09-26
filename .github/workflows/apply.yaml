@@ -1,12 +1,14 @@
 name: Terraform Apply
 
 on:
-  workflow_dispatch:   # Solo se ejecuta manualmente desde Actions
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
-
     permissions:
       id-token: write
       contents: read
