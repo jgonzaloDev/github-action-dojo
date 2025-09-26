@@ -1,7 +1,7 @@
 name: Terraform Apply
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:   # Solo se ejecuta manualmente desde Actions
 
 jobs:
   terraform:

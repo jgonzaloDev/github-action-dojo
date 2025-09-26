@@ -1,0 +1,7 @@
+﻿{
+  "name": "github-actions-test-cicd",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "subject": "repo:jgonzaloDev//heads/test-cicd",
+  "description": "OIDC federated credential for GitHub Actions test-cicd branch",
+  "audiences": ["api://AzureADTokenExchange"]
+}
