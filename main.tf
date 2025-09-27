@@ -82,12 +82,12 @@ resource "azurerm_subnet" "privateend" {
 # SQL Server + Database
 # ======================
 resource "azurerm_mssql_server" "sql_server" {
-  name                         = var.sql_server_name
-  resource_group_name          = var.resource_group_name
-  location                     = var.location
-  version                      = "12.0"
-  administrator_login          = var.sql_admin_login
-  administrator_login_password = var.sql_admin_password
+  name                          = var.sql_server_name
+  resource_group_name           = var.resource_group_name
+  location                      = var.location
+  version                       = "12.0"
+  administrator_login           = var.sql_admin_login
+  administrator_login_password  = var.sql_admin_password
   public_network_access_enabled = false
 }
 
@@ -191,6 +191,7 @@ resource "azurerm_private_endpoint" "backend_pe" {
     name                           = "backend-connection"
     private_connection_resource_id = azurerm_linux_web_app.backend.id
     subresource_names              = ["sites"]
+    is_manual_connection           = false
   }
 }
 
@@ -204,6 +205,7 @@ resource "azurerm_private_endpoint" "frontend_pe" {
     name                           = "frontend-connection"
     private_connection_resource_id = azurerm_windows_web_app.frontend.id
     subresource_names              = ["sites"]
+    is_manual_connection           = false
   }
 }
 
@@ -217,6 +219,7 @@ resource "azurerm_private_endpoint" "sql_pe" {
     name                           = "sqlserver1-connection"
     private_connection_resource_id = azurerm_mssql_server.sql_server.id
     subresource_names              = ["sqlServer"]
+    is_manual_connection           = false
   }
 }
 
@@ -230,6 +233,7 @@ resource "azurerm_private_endpoint" "keyvault_pe" {
     name                           = "keyvault-connection"
     private_connection_resource_id = "/subscriptions/${data.azurerm_subscription.primary.subscription_id}/resourceGroups/${var.resource_group_name}/providers/Microsoft.KeyVault/vaults/${var.key_vault_name}"
     subresource_names              = ["vault"]
+    is_manual_connection           = false
   }
 }
 
@@ -243,6 +247,7 @@ resource "azurerm_private_endpoint" "blob_pe" {
     name                           = "blob-connection"
     private_connection_resource_id = "/subscriptions/${data.azurerm_subscription.primary.subscription_id}/resourceGroups/${var.resource_group_name}/providers/Microsoft.Storage/storageAccounts/${var.storage_account_name}"
     subresource_names              = ["blob"]
+    is_manual_connection           = false
   }
 }
 
@@ -308,44 +313,44 @@ resource "azurerm_application_gateway" "appgw" {
   }
 
   backend_http_settings {
-    name          = "setting-backend"
-    port          = 443
-    protocol      = "Https"
+    name            = "setting-backend"
+    port            = 443
+    protocol        = "Https"
     request_timeout = 20
-    probe_name    = "probe-backend"
-    host_name     = "api-backend-dojo.azurewebsites.net"
+    probe_name      = "probe-backend"
+    host_name       = "api-backend-dojo.azurewebsites.net"
   }
 
   backend_http_settings {
-    name          = "setting-frontend"
-    port          = 443
-    protocol      = "Https"
+    name            = "setting-frontend"
+    port            = 443
+    protocol        = "Https"
     request_timeout = 20
-    probe_name    = "probe-frontend"
-    host_name     = "front22.azurewebsites.net"
+    probe_name      = "probe-frontend"
+    host_name       = "front22.azurewebsites.net"
   }
 
   probe {
-    name     = "probe-backend"
-    protocol = "Https"
-    host     = "api-backend-dojo.azurewebsites.net"
-    path     = "/api/alumnos"
-    interval = 30
-    timeout  = 30
-    unhealthy_threshold = 3
+    name                 = "probe-backend"
+    protocol             = "Https"
+    host                 = "api-backend-dojo.azurewebsites.net"
+    path                 = "/api/alumnos"
+    interval             = 30
+    timeout              = 30
+    unhealthy_threshold  = 3
     match {
       status_code = ["200-399"]
     }
   }
 
   probe {
-    name     = "probe-frontend"
-    protocol = "Https"
-    host     = "front22.azurewebsites.net"
-    path     = "/"
-    interval = 30
-    timeout  = 30
-    unhealthy_threshold = 3
+    name                 = "probe-frontend"
+    protocol             = "Https"
+    host                 = "front22.azurewebsites.net"
+    path                 = "/"
+    interval             = 30
+    timeout              = 30
+    unhealthy_threshold  = 3
     match {
       status_code = ["200-399"]
     }
