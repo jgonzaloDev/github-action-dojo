@@ -290,7 +290,7 @@ resource "azurerm_application_gateway" "appgw" {
 
   ssl_certificate {
     name     = "cert-app-dojo"
-    data     = filebase64("${path.module}/certs/app-dojo.com.pfx")
+    data     = var.cert_data   # ahora viene del secret en GitHub
     password = var.cert_password
   }
 

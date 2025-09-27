@@ -47,4 +47,5 @@ jobs:
           TF_VAR_app_service_name_web: ${{ secrets.TF_VAR_APP_SERVICE_NAME_WEB }}
           TF_VAR_key_vault_name: ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
           TF_VAR_storage_account_name: ${{ secrets.TF_VAR_STORAGE_ACCOUNT_NAME }}
+          TF_VAR_cert_data: ${{ secrets.TF_VAR_cert_data }}
           TF_VAR_cert_password: ${{ secrets.TF_VAR_CERT_PASSWORD }}

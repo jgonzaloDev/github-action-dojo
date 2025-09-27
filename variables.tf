@@ -108,3 +108,10 @@ variable "cert_password" {
   description = "Contraseña del certificado PFX para Application Gateway"
   sensitive   = true
 }
+
+variable "cert_data" {
+  type        = string
+  description = "Contenido Base64 del certificado PFX (se pasa como secret desde GitHub Actions)"
+  sensitive   = true
+}
+
