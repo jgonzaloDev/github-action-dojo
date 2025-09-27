@@ -1,8 +1,10 @@
 name: Terraform Destroy
 
 on:
-  workflow_dispatch:   # se ejecuta manualmente desde la pestaña Actions
-  # también podrías poner "push" o "pull_request" si quisieras automatizar
+  workflow_dispatch:   # Se ejecuta manualmente desde Actions
+  push:
+    branches:
+      - destroy        # También se ejecuta al hacer push a la rama "destroy"
 
 jobs:
   terraform:
@@ -33,4 +35,5 @@ jobs:
         run: terraform destroy -auto-approve
         env:
           TF_VAR_resource_group_name: ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
-          TF_VAR_location: ${{ secrets.TF_VAR_location }}
+          TF_VAR_location: ${{ secrets.TF_VAR_LOCATION }}
+
