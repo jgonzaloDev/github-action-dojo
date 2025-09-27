@@ -1,9 +1,6 @@
-name: Terraform Apply
+name: Terraform Destroy
 
 on:
-  push:
-    branches:
-      - develop
   workflow_dispatch:
 
 jobs:
@@ -30,5 +27,5 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      - name: Terraform Apply
-        run: terraform apply -auto-approve
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve

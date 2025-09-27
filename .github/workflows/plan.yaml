@@ -3,7 +3,7 @@ name: Terraform Plan
 on:
   pull_request:
     branches:
-      - main
+      - develop
   workflow_dispatch:
 
 jobs:
@@ -32,6 +32,3 @@ jobs:
 
       - name: Terraform Plan
         run: terraform plan
-        env:
-          TF_VAR_resource_group_name: ${{ secrets.TF_VAR_resource_group_name }}
-          TF_VAR_location: ${{ secrets.TF_VAR_location }}
