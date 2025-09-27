@@ -1,7 +1,7 @@
 name: Terraform Destroy
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:   # Permite ejecutar este workflow manualmente desde Actions
 
 jobs:
   terraform:
@@ -49,3 +49,6 @@ jobs:
           TF_VAR_storage_account_name: ${{ secrets.TF_VAR_STORAGE_ACCOUNT_NAME }}
           TF_VAR_cert_data: ${{ secrets.TF_VAR_cert_data }}
           TF_VAR_cert_password: ${{ secrets.TF_VAR_CERT_PASSWORD }}
+
+# 👇 Comentario agregado para forzar a GitHub a detectar cambios en este workflow
+# Última actualización: forzar reindexación del workflow Destroy
