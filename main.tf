@@ -313,21 +313,23 @@ resource "azurerm_application_gateway" "appgw" {
   }
 
   backend_http_settings {
-    name            = "setting-backend"
-    port            = 443
-    protocol        = "Https"
-    request_timeout = 20
-    probe_name      = "probe-backend"
-    host_name       = "api-backend-dojo.azurewebsites.net"
+    name                  = "setting-backend"
+    port                  = 443
+    protocol              = "Https"
+    request_timeout       = 20
+    probe_name            = "probe-backend"
+    host_name             = "api-backend-dojo.azurewebsites.net"
+    cookie_based_affinity = "Disabled"
   }
 
   backend_http_settings {
-    name            = "setting-frontend"
-    port            = 443
-    protocol        = "Https"
-    request_timeout = 20
-    probe_name      = "probe-frontend"
-    host_name       = "front22.azurewebsites.net"
+    name                  = "setting-frontend"
+    port                  = 443
+    protocol              = "Https"
+    request_timeout       = 20
+    probe_name            = "probe-frontend"
+    host_name             = "front22.azurewebsites.net"
+    cookie_based_affinity = "Disabled"
   }
 
   probe {
@@ -393,3 +395,4 @@ resource "azurerm_role_assignment" "backend_kv" {
   role_definition_name = "Key Vault Secrets User"
   principal_id         = azurerm_linux_web_app.backend.identity[0].principal_id
 }
+
