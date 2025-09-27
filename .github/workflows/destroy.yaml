@@ -1,22 +1,35 @@
 name: Terraform Destroy
 
 on:
-  workflow_dispatch:   # Se ejecuta manualmente desde Actions
+  # manual desde Actions (con confirmación)
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Escribe YES para destruir los recursos definidos en main"
+        required: true
+        default: "NO"
+  # automático cuando haces push a la rama 'destroy'
   push:
-    branches:
-      - destroy        # También se ejecuta al hacer push a la rama "destroy"
+    branches: [ destroy ]
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
 
     permissions:
-      id-token: write   # Necesario para OIDC
+      id-token: write
       contents: read
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repo (rama destroy)
         uses: actions/checkout@v4
+
+      # Bloquea ejecución manual si no confirmas
+      - name: Confirmación (solo manual)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.confirm != 'YES' }}
+        run: |
+          echo "Se requiere confirmar con YES para continuar."
+          exit 1
 
       - name: Azure Login (OIDC)
         uses: azure/login@v2
@@ -24,6 +37,15 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Descarga el tfstate subido por apply.yaml ejecutado en la rama main
+      - name: Download tfstate from Apply (main)
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: apply.yaml      # <-- nombre exacto del workflow de APPLY
+          name: tfstate-main        # <-- artifact generado en APPLY
+          branch: main              # <-- toma el último run exitoso de MAIN
+          path: .                   # lo deja en la raíz del repo
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -35,5 +57,6 @@ jobs:
         run: terraform destroy -auto-approve
         env:
           TF_VAR_resource_group_name: ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
-          TF_VAR_location: ${{ secrets.TF_VAR_LOCATION }}
+          TF_VAR_location:           ${{ secrets.TF_VAR_LOCATION }}
+
 
