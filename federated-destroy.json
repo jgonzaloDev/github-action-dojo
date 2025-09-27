@@ -1,0 +1,7 @@
+{
+  "name": "github-actions-destroy",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "subject": "repo:jgonzaloDev/github-action-dojo:ref:refs/heads/destroy",
+  "description": "OIDC federated credential for GitHub Actions destroy branch",
+  "audiences": ["api://AzureADTokenExchange"]
+}
