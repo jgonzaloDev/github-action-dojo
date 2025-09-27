@@ -1,10 +1,12 @@
-name: Terraform Plan
+
+
+name: Terraform Destroy
 
 on:
-  pull_request:
+  push:
     branches:
-      - main
-  workflow_dispatch:
+      - destroy
+  workflow_dispatch:   # Para lanzarlo manualmente desde Actions si quieres
 
 jobs:
   terraform:
@@ -30,8 +32,8 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      - name: Terraform Plan
-        run: terraform plan
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve
         env:
           TF_VAR_resource_group_name: ${{ secrets.TF_VAR_resource_group_name }}
           TF_VAR_location: ${{ secrets.TF_VAR_location }}
