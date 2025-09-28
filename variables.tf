@@ -92,16 +92,16 @@ variable "app_service_name_web" {
 # ======================
 variable "key_vault_name" {
   type        = string
-  description = "Nombre del Key Vault"
+  description = "Nombre del Key Vault utilizado para almacenar secretos"
 }
 
 variable "storage_account_name" {
   type        = string
-  description = "Nombre de la cuenta de almacenamiento (Blob)"
+  description = "Nombre de la cuenta de almacenamiento (Blob Storage)"
 }
 
 # ======================
-# Certificados
+# Certificados (para App Gateway)
 # ======================
 variable "cert_password" {
   type        = string
@@ -111,7 +111,7 @@ variable "cert_password" {
 
 variable "cert_data" {
   type        = string
-  description = "Contenido Base64 del certificado PFX (se pasa como secret desde GitHub Actions)"
+  description = "Contenido en Base64 del certificado PFX (inyectado como secret desde GitHub Actions)"
   sensitive   = true
 }
 

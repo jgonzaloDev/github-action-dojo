@@ -193,6 +193,11 @@ resource "azurerm_private_endpoint" "backend_pe" {
     subresource_names              = ["sites"]
     is_manual_connection           = false
   }
+
+  depends_on = [
+    azurerm_subnet.privateend,
+    azurerm_linux_web_app.backend
+  ]
 }
 
 resource "azurerm_private_endpoint" "frontend_pe" {
@@ -207,6 +212,11 @@ resource "azurerm_private_endpoint" "frontend_pe" {
     subresource_names              = ["sites"]
     is_manual_connection           = false
   }
+
+  depends_on = [
+    azurerm_subnet.privateend,
+    azurerm_windows_web_app.frontend
+  ]
 }
 
 resource "azurerm_private_endpoint" "sql_pe" {
@@ -221,6 +231,11 @@ resource "azurerm_private_endpoint" "sql_pe" {
     subresource_names              = ["sqlServer"]
     is_manual_connection           = false
   }
+
+  depends_on = [
+    azurerm_subnet.sql,
+    azurerm_mssql_server.sql_server
+  ]
 }
 
 resource "azurerm_private_endpoint" "keyvault_pe" {
@@ -235,6 +250,10 @@ resource "azurerm_private_endpoint" "keyvault_pe" {
     subresource_names              = ["vault"]
     is_manual_connection           = false
   }
+
+  depends_on = [
+    azurerm_subnet.keyvault
+  ]
 }
 
 resource "azurerm_private_endpoint" "blob_pe" {
@@ -249,6 +268,10 @@ resource "azurerm_private_endpoint" "blob_pe" {
     subresource_names              = ["blob"]
     is_manual_connection           = false
   }
+
+  depends_on = [
+    azurerm_subnet.blobstorage
+  ]
 }
 
 # ======================
@@ -290,7 +313,7 @@ resource "azurerm_application_gateway" "appgw" {
 
   ssl_certificate {
     name     = "cert-app-dojo"
-    data     = var.cert_data   # ahora viene del secret en GitHub
+    data     = var.cert_data
     password = var.cert_password
   }
 
@@ -395,4 +418,5 @@ resource "azurerm_role_assignment" "backend_kv" {
   role_definition_name = "Key Vault Secrets User"
   principal_id         = azurerm_linux_web_app.backend.identity[0].principal_id
 }
+
 
