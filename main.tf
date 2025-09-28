@@ -252,7 +252,8 @@ resource "azurerm_private_endpoint" "keyvault_pe" {
   }
 
   depends_on = [
-    azurerm_subnet.keyvault
+    azurerm_subnet.keyvault,
+    azurerm_virtual_network.vnet
   ]
 }
 
@@ -270,7 +271,8 @@ resource "azurerm_private_endpoint" "blob_pe" {
   }
 
   depends_on = [
-    azurerm_subnet.blobstorage
+    azurerm_subnet.blobstorage,
+    azurerm_virtual_network.vnet
   ]
 }
 
