@@ -111,9 +111,9 @@ resource "azurerm_linux_web_app" "backend" {
     APP_KEY       = "base64:VwPBpk2jFkp2o1Y32nMP8hjuugrCeADr0HdmT8ku6Ro="
     DB_CONNECTION = "sqlsrv"
     DB_HOST       = azurerm_mssql_server.sql_server.fully_qualified_domain_name
-    DB_DATABASE   = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/DB-DATABASE/)"
-    DB_USERNAME   = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/DB-USERNAME/)"
-    DB_PASSWORD   = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/DB-PASSWORD/)"
+    DB_DATABASE   = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/DB_DATABASE/)"
+    DB_USERNAME   = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/DB_USERNAME/)"
+    DB_PASSWORD   = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/DB_PASSWORD/)"
   }
 }
 
@@ -141,13 +141,55 @@ resource "azurerm_app_service_virtual_network_swift_connection" "backend_vnet" {
 }
 
 # ============================================================
+# 2.6 - Private Endpoints (Backend y Frontend)
+# ============================================================
+
+resource "azurerm_private_endpoint" "backend_pe" {
+  name                = "pe-backend"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = azurerm_subnet.subnet_pe.id
+
+  private_service_connection {
+    name                           = "backend-connection"
+    private_connection_resource_id = azurerm_linux_web_app.backend.id
+    subresource_names              = ["sites"]
+    is_manual_connection           = false
+  }
+
+  depends_on = [
+    azurerm_linux_web_app.backend,
+    azurerm_subnet.subnet_pe
+  ]
+}
+
+resource "azurerm_private_endpoint" "frontend_pe" {
+  name                = "pe-frontend"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = azurerm_subnet.subnet_pe.id
+
+  private_service_connection {
+    name                           = "frontend-connection"
+    private_connection_resource_id = azurerm_windows_web_app.frontend.id
+    subresource_names              = ["sites"]
+    is_manual_connection           = false
+  }
+
+  depends_on = [
+    azurerm_windows_web_app.frontend,
+    azurerm_subnet.subnet_pe
+  ]
+}
+
+# ============================================================
 # 3.0 - Application Gateway
 # ============================================================
 
 resource "azurerm_public_ip" "appgw_ip" {
   name                = "appgw-publicip"
   location            = var.location
-  resource_group_name = var.resource_group_name
+  resource_group_name = azurerm_resource_group.rg.name
   allocation_method   = "Static"
   sku                 = "Standard"
 }
@@ -155,7 +197,7 @@ resource "azurerm_public_ip" "appgw_ip" {
 resource "azurerm_application_gateway" "appgw" {
   name                = "dojo-appgw"
   location            = var.location
-  resource_group_name = var.resource_group_name
+  resource_group_name = azurerm_resource_group.rg.name
 
   sku {
     name     = "Standard_v2"
@@ -164,17 +206,17 @@ resource "azurerm_application_gateway" "appgw" {
   }
 
   gateway_ip_configuration {
-    name      = "appgw-ip-config"
-    subnet_id = azurerm_subnet.appgw.id
+    name      = "gateway-ip"
+    subnet_id = azurerm_subnet.subnet_agw.id
   }
 
   frontend_ip_configuration {
-    name                 = "appgw-frontend-ip"
+    name                 = "frontend-ip"
     public_ip_address_id = azurerm_public_ip.appgw_ip.id
   }
 
   frontend_port {
-    name = "frontendPort443"
+    name = "port443"
     port = 443
   }
 
@@ -186,8 +228,8 @@ resource "azurerm_application_gateway" "appgw" {
 
   http_listener {
     name                           = "listener-https"
-    frontend_ip_configuration_name = "appgw-frontend-ip"
-    frontend_port_name             = "frontendPort443"
+    frontend_ip_configuration_name = "frontend-ip"
+    frontend_port_name             = "port443"
     protocol                       = "Https"
     ssl_certificate_name           = "cert-app-dojo"
   }
@@ -206,50 +248,44 @@ resource "azurerm_application_gateway" "appgw" {
     name                  = "setting-backend"
     port                  = 443
     protocol              = "Https"
-    request_timeout       = 20
-    probe_name            = "probe-backend"
-    host_name             = "api-backend-dojo.azurewebsites.net"
+    request_timeout       = 30
     cookie_based_affinity = "Disabled"
+    probe_name            = "probe-backend"
   }
 
   backend_http_settings {
     name                  = "setting-frontend"
     port                  = 443
     protocol              = "Https"
-    request_timeout       = 20
-    probe_name            = "probe-frontend"
-    host_name             = "front22.azurewebsites.net"
+    request_timeout       = 30
     cookie_based_affinity = "Disabled"
+    probe_name            = "probe-frontend"
   }
 
   probe {
-    name                 = "probe-backend"
-    protocol             = "Https"
-    host                 = "api-backend-dojo.azurewebsites.net"
-    path                 = "/api/alumnos"
-    interval             = 30
-    timeout              = 30
-    unhealthy_threshold  = 3
-    match {
-      status_code = ["200-399"]
-    }
+    name                = "probe-backend"
+    protocol            = "Https"
+    host                = "api-backend-dojo.azurewebsites.net"
+    path                = "/api/alumnos"
+    interval            = 30
+    timeout             = 30
+    unhealthy_threshold = 3
+    match { status_code = ["200-399"] }
   }
 
   probe {
-    name                 = "probe-frontend"
-    protocol             = "Https"
-    host                 = "front22.azurewebsites.net"
-    path                 = "/"
-    interval             = 30
-    timeout              = 30
-    unhealthy_threshold  = 3
-    match {
-      status_code = ["200-399"]
-    }
+    name                = "probe-frontend"
+    protocol            = "Https"
+    host                = "front22.azurewebsites.net"
+    path                = "/"
+    interval            = 30
+    timeout             = 30
+    unhealthy_threshold = 3
+    match { status_code = ["200-399"] }
   }
 
   url_path_map {
-    name                               = "url-path-map"
+    name                               = "url-map"
     default_backend_address_pool_name  = "pool-frontend"
     default_backend_http_settings_name = "setting-frontend"
 
@@ -269,12 +305,17 @@ resource "azurerm_application_gateway" "appgw" {
   }
 
   request_routing_rule {
-    name               = "rule-path-routing"
+    name               = "rule-routing"
     rule_type          = "PathBasedRouting"
     http_listener_name = "listener-https"
-    url_path_map_name  = "url-path-map"
+    url_path_map_name  = "url-map"
     priority           = 100
   }
+
+  depends_on = [
+    azurerm_private_endpoint.backend_pe,
+    azurerm_private_endpoint.frontend_pe
+  ]
 }
 
 # ============================================================
@@ -282,29 +323,29 @@ resource "azurerm_application_gateway" "appgw" {
 # ============================================================
 
 resource "azurerm_key_vault" "keyvault" {
-  name                      = var.key_vault_name
-  location                  = var.location
-  resource_group_name       = azurerm_resource_group.rg.name
-  tenant_id                 = var.tenant_id
-  sku_name                  = "standard"
+  name                       = var.key_vault_name
+  location                   = var.location
+  resource_group_name        = azurerm_resource_group.rg.name
+  tenant_id                  = var.tenant_id
+  sku_name                   = "standard"
   soft_delete_retention_days = 7
   purge_protection_enabled   = false
 }
 
 resource "azurerm_key_vault_secret" "db_name" {
-  name         = "DB-DATABASE"
+  name         = "DB_DATABASE"
   value        = var.database_name
   key_vault_id = azurerm_key_vault.keyvault.id
 }
 
 resource "azurerm_key_vault_secret" "db_user" {
-  name         = "DB-USERNAME"
+  name         = "DB_USERNAME"
   value        = var.sql_admin_login
   key_vault_id = azurerm_key_vault.keyvault.id
 }
 
 resource "azurerm_key_vault_secret" "db_pass" {
-  name         = "DB-PASSWORD"
+  name         = "DB_PASSWORD"
   value        = var.sql_admin_password
   key_vault_id = azurerm_key_vault.keyvault.id
 }
