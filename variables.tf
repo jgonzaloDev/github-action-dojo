@@ -122,3 +122,12 @@ variable "subnets" {
     privateend   = "subnet-pe"
   }
 }
+
+# ============================================================
+# ID de la identidad federada (OIDC) de GitHub Actions
+# ============================================================
+
+variable "azure_client_id" {
+  description = "Client ID de la identidad federada de GitHub (OIDC)"
+  type        = string
+}
