@@ -333,19 +333,19 @@ resource "azurerm_key_vault" "keyvault" {
 }
 
 resource "azurerm_key_vault_secret" "db_name" {
-  name         = "DB_DATABASE"
+  name         = "db-database"
   value        = var.database_name
   key_vault_id = azurerm_key_vault.keyvault.id
 }
 
 resource "azurerm_key_vault_secret" "db_user" {
-  name         = "DB_USERNAME"
+  name         = "db-username"
   value        = var.sql_admin_login
   key_vault_id = azurerm_key_vault.keyvault.id
 }
 
 resource "azurerm_key_vault_secret" "db_pass" {
-  name         = "DB_PASSWORD"
+  name         = "db-password"
   value        = var.sql_admin_password
   key_vault_id = azurerm_key_vault.keyvault.id
 }
