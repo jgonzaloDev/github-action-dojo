@@ -112,6 +112,7 @@ resource "azurerm_linux_web_app" "backend" {
     application_stack {
       php_version = "8.2"
     }
+    app_command_line = "cp /home/site/wwwroot/default /etc/nginx/sites-available/default && service nginx reload"
   }
 
   app_settings = {
