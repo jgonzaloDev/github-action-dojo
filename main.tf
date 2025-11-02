@@ -14,7 +14,7 @@ provider "azurerm" {
 }
 
 # ============================================================
-# 1.0 - Grupo de Recursos y Red Virtual
+# 1.0 - GRUPO DE RECURSOS Y RED VIRTUAL
 # ============================================================
 
 resource "azurerm_resource_group" "rg" {
@@ -30,7 +30,7 @@ resource "azurerm_virtual_network" "vnet" {
 }
 
 # -----------------------------
-# 1.1 Subnets
+# 1.1 SUBNETS
 # -----------------------------
 resource "azurerm_subnet" "subnet_agw" {
   name                 = "subnet-agw"
@@ -54,7 +54,7 @@ resource "azurerm_subnet" "subnet_appservices" {
   }
 }
 
-# ✅ Se agregó la delegación aquí también
+# ✅ Delegación agregada para integración de App Service
 resource "azurerm_subnet" "subnet_integration" {
   name                 = "subnet-integration"
   resource_group_name  = azurerm_resource_group.rg.name
@@ -78,7 +78,27 @@ resource "azurerm_subnet" "subnet_pe" {
 }
 
 # ============================================================
-# 2.0 - App Services
+# 2.0 - SQL SERVER Y BASE DE DATOS (debe ir antes de App Services)
+# ============================================================
+
+resource "azurerm_mssql_server" "sql_server" {
+  name                          = var.sql_server_name
+  resource_group_name           = azurerm_resource_group.rg.name
+  location                      = var.location
+  version                       = "12.0"
+  administrator_login           = var.sql_admin_login
+  administrator_login_password  = var.sql_admin_password
+  public_network_access_enabled = false
+}
+
+resource "azurerm_mssql_database" "database" {
+  name      = var.database_name
+  server_id = azurerm_mssql_server.sql_server.id
+  sku_name  = "Basic"
+}
+
+# ============================================================
+# 3.0 - APP SERVICES
 # ============================================================
 
 resource "azurerm_service_plan" "plan_backend" {
@@ -125,6 +145,11 @@ resource "azurerm_linux_web_app" "backend" {
     DB_USERNAME   = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/db-username/)"
     DB_PASSWORD   = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/db-password/)"
   }
+
+  depends_on = [
+    azurerm_mssql_server.sql_server,
+    azurerm_key_vault.keyvault
+  ]
 }
 
 resource "azurerm_windows_web_app" "frontend" {
@@ -143,6 +168,10 @@ resource "azurerm_windows_web_app" "frontend" {
   app_settings = {
     WEBSITE_NODE_DEFAULT_VERSION = "~22"
   }
+
+  depends_on = [
+    azurerm_linux_web_app.backend
+  ]
 }
 
 resource "azurerm_app_service_virtual_network_swift_connection" "backend_vnet" {
@@ -151,17 +180,17 @@ resource "azurerm_app_service_virtual_network_swift_connection" "backend_vnet" {
 }
 
 # ============================================================
-# 4.0 - Key Vault, SQL Server, Blob Storage
+# 4.0 - KEY VAULT, STORAGE Y PERMISOS
 # ============================================================
 
 resource "azurerm_key_vault" "keyvault" {
   name                       = var.key_vault_name
   location                   = var.location
-  resource_group_name         = azurerm_resource_group.rg.name
-  tenant_id                   = var.tenant_id
-  sku_name                    = "standard"
-  soft_delete_retention_days  = 7
-  purge_protection_enabled    = false
+  resource_group_name        = azurerm_resource_group.rg.name
+  tenant_id                  = var.tenant_id
+  sku_name                   = "standard"
+  soft_delete_retention_days = 7
+  purge_protection_enabled   = false
 }
 
 resource "azurerm_key_vault_secret" "db_name" {
@@ -182,15 +211,24 @@ resource "azurerm_key_vault_secret" "db_pass" {
   key_vault_id = azurerm_key_vault.keyvault.id
 }
 
+resource "azurerm_storage_account" "storage" {
+  name                     = var.storage_account_name
+  resource_group_name      = azurerm_resource_group.rg.name
+  location                 = var.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+}
+
+# ✅ Rol del backend para leer secretos del Key Vault
 resource "azurerm_role_assignment" "backend_kv" {
   scope                = azurerm_key_vault.keyvault.id
   role_definition_name = "Key Vault Secrets User"
   principal_id         = azurerm_linux_web_app.backend.identity[0].principal_id
 }
 
-# ✅ Rol adicional para que GitHub Actions (OIDC) tenga permisos sobre Key Vault
+# ✅ Rol para GitHub Actions (OIDC) con permisos de administrador del Key Vault
 resource "azurerm_role_assignment" "github_actions_kv_admin" {
   scope                = azurerm_key_vault.keyvault.id
   role_definition_name = "Key Vault Administrator"
-  principal_id         = var.azure_client_id  # reutiliza tu secret AZURE_CLIENT_ID
+  principal_id         = var.azure_client_id
 }
