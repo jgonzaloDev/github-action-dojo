@@ -1,0 +1,71 @@
+name: Deploy Backend (Laravel App)
+
+on:
+  workflow_dispatch:  # se ejecuta manualmente desde Actions
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+
+    steps:
+      # =============================
+      # 1️⃣ Login en Azure mediante OIDC
+      # =============================
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # =============================
+      # 2️⃣ Clonar el backend Laravel desde su repositorio
+      # =============================
+      - name: Clonar backend (Laravel)
+        uses: actions/checkout@v4
+        with:
+          repository: jgonzaloDev/API_BACKEND-16-08-2025
+          ref: develop
+          token: ${{ secrets.GH_PERSONAL_TOKEN }}
+          path: backend
+
+      # =============================
+      # 3️⃣ Configurar PHP y Composer (para Laravel)
+      # =============================
+      - name: Configurar PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, bcmath, pdo, pdo_mysql, xml, curl, zip
+          tools: composer
+
+      - name: Instalar dependencias de Laravel
+        working-directory: ./backend
+        run: |
+          composer install --no-dev --optimize-autoloader
+
+      # =============================
+      # 4️⃣ Compilar assets si Laravel usa Vite o NPM
+      # =============================
+      - name: Compilar assets de Laravel (si aplica)
+        working-directory: ./backend
+        run: |
+          if [ -f "package.json" ]; then
+            npm install
+            npm run build
+          else
+            echo "No se detectó package.json, se omite la compilación de frontend."
+          fi
+
+      # =============================
+      # 5️⃣ Desplegar en Azure App Service
+      # =============================
+      - name: Desplegar Laravel en Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: api-backend-dojo
+          package: ./backend
