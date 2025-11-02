@@ -147,7 +147,7 @@ resource "azurerm_app_service_virtual_network_swift_connection" "backend_vnet" {
 resource "azurerm_public_ip" "appgw_ip" {
   name                = "appgw-publicip"
   location            = var.location
-  resource_group_name = azurerm_resource_group.rg.name
+  resource_group_name = var.resource_group_name
   allocation_method   = "Static"
   sku                 = "Standard"
 }
@@ -155,7 +155,7 @@ resource "azurerm_public_ip" "appgw_ip" {
 resource "azurerm_application_gateway" "appgw" {
   name                = "dojo-appgw"
   location            = var.location
-  resource_group_name = azurerm_resource_group.rg.name
+  resource_group_name = var.resource_group_name
 
   sku {
     name     = "Standard_v2"
@@ -164,17 +164,17 @@ resource "azurerm_application_gateway" "appgw" {
   }
 
   gateway_ip_configuration {
-    name      = "gateway-ip"
-    subnet_id = azurerm_subnet.subnet_agw.id
+    name      = "appgw-ip-config"
+    subnet_id = azurerm_subnet.appgw.id
   }
 
   frontend_ip_configuration {
-    name                 = "frontend-ip"
+    name                 = "appgw-frontend-ip"
     public_ip_address_id = azurerm_public_ip.appgw_ip.id
   }
 
   frontend_port {
-    name = "port443"
+    name = "frontendPort443"
     port = 443
   }
 
@@ -186,62 +186,70 @@ resource "azurerm_application_gateway" "appgw" {
 
   http_listener {
     name                           = "listener-https"
-    frontend_ip_configuration_name = "frontend-ip"
-    frontend_port_name             = "port443"
+    frontend_ip_configuration_name = "appgw-frontend-ip"
+    frontend_port_name             = "frontendPort443"
     protocol                       = "Https"
     ssl_certificate_name           = "cert-app-dojo"
   }
 
   backend_address_pool {
     name         = "pool-backend"
-    ip_addresses = azurerm_linux_web_app.backend.outbound_ip_addresses
+    ip_addresses = [azurerm_private_endpoint.backend_pe.private_service_connection[0].private_ip_address]
   }
 
   backend_address_pool {
     name         = "pool-frontend"
-    ip_addresses = azurerm_windows_web_app.frontend.outbound_ip_addresses
+    ip_addresses = [azurerm_private_endpoint.frontend_pe.private_service_connection[0].private_ip_address]
   }
 
   backend_http_settings {
-    name            = "setting-backend"
-    port            = 443
-    protocol        = "Https"
-    request_timeout = 30
-    probe_name      = "probe-backend"
+    name                  = "setting-backend"
+    port                  = 443
+    protocol              = "Https"
+    request_timeout       = 20
+    probe_name            = "probe-backend"
+    host_name             = "api-backend-dojo.azurewebsites.net"
+    cookie_based_affinity = "Disabled"
   }
 
   backend_http_settings {
-    name            = "setting-frontend"
-    port            = 443
-    protocol        = "Https"
-    request_timeout = 30
-    probe_name      = "probe-frontend"
+    name                  = "setting-frontend"
+    port                  = 443
+    protocol              = "Https"
+    request_timeout       = 20
+    probe_name            = "probe-frontend"
+    host_name             = "front22.azurewebsites.net"
+    cookie_based_affinity = "Disabled"
   }
 
   probe {
-    name                = "probe-backend"
-    protocol            = "Https"
-    host                = "api-backend-dojo.azurewebsites.net"
-    path                = "/api/alumnos"
-    interval            = 30
-    timeout             = 30
-    unhealthy_threshold = 3
-    match { status_code = ["200-399"] }
+    name                 = "probe-backend"
+    protocol             = "Https"
+    host                 = "api-backend-dojo.azurewebsites.net"
+    path                 = "/api/alumnos"
+    interval             = 30
+    timeout              = 30
+    unhealthy_threshold  = 3
+    match {
+      status_code = ["200-399"]
+    }
   }
 
   probe {
-    name                = "probe-frontend"
-    protocol            = "Https"
-    host                = "front22.azurewebsites.net"
-    path                = "/"
-    interval            = 30
-    timeout             = 30
-    unhealthy_threshold = 3
-    match { status_code = ["200-399"] }
+    name                 = "probe-frontend"
+    protocol             = "Https"
+    host                 = "front22.azurewebsites.net"
+    path                 = "/"
+    interval             = 30
+    timeout              = 30
+    unhealthy_threshold  = 3
+    match {
+      status_code = ["200-399"]
+    }
   }
 
   url_path_map {
-    name                               = "url-map"
+    name                               = "url-path-map"
     default_backend_address_pool_name  = "pool-frontend"
     default_backend_http_settings_name = "setting-frontend"
 
@@ -261,10 +269,10 @@ resource "azurerm_application_gateway" "appgw" {
   }
 
   request_routing_rule {
-    name               = "rule-routing"
+    name               = "rule-path-routing"
     rule_type          = "PathBasedRouting"
     http_listener_name = "listener-https"
-    url_path_map_name  = "url-map"
+    url_path_map_name  = "url-path-map"
     priority           = 100
   }
 }
