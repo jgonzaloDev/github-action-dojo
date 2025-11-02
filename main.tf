@@ -30,7 +30,7 @@ resource "azurerm_virtual_network" "vnet" {
 }
 
 # -----------------------------
-# 1.1 Subnet - Application Gateway
+# 1.1 Subnets
 # -----------------------------
 resource "azurerm_subnet" "subnet_agw" {
   name                 = "subnet-agw"
@@ -39,9 +39,6 @@ resource "azurerm_subnet" "subnet_agw" {
   address_prefixes     = ["10.0.1.0/24"]
 }
 
-# -----------------------------
-# 1.2 Subnet - App Services (Backend + Frontend)
-# -----------------------------
 resource "azurerm_subnet" "subnet_appservices" {
   name                 = "subnet-appservices"
   resource_group_name  = azurerm_resource_group.rg.name
@@ -57,9 +54,6 @@ resource "azurerm_subnet" "subnet_appservices" {
   }
 }
 
-# -----------------------------
-# 1.3 Subnet - Integración (Backend)
-# -----------------------------
 resource "azurerm_subnet" "subnet_integration" {
   name                 = "subnet-integration"
   resource_group_name  = azurerm_resource_group.rg.name
@@ -67,9 +61,6 @@ resource "azurerm_subnet" "subnet_integration" {
   address_prefixes     = ["10.0.3.0/24"]
 }
 
-# -----------------------------
-# 1.4 Subnet - Private Endpoints (Key Vault, SQL, Blob)
-# -----------------------------
 resource "azurerm_subnet" "subnet_pe" {
   name                 = "subnet-pe"
   resource_group_name  = azurerm_resource_group.rg.name
@@ -81,9 +72,6 @@ resource "azurerm_subnet" "subnet_pe" {
 # 2.0 - App Services
 # ============================================================
 
-# -----------------------------
-# 2.1 Plan Linux (Backend)
-# -----------------------------
 resource "azurerm_service_plan" "plan_backend" {
   name                = var.app_service_plan_name
   location            = var.location
@@ -92,9 +80,6 @@ resource "azurerm_service_plan" "plan_backend" {
   sku_name            = "B1"
 }
 
-# -----------------------------
-# 2.2 Plan Windows (Frontend)
-# -----------------------------
 resource "azurerm_service_plan" "plan_frontend" {
   name                = var.app_service_plan_name_web
   location            = var.location
@@ -103,9 +88,6 @@ resource "azurerm_service_plan" "plan_frontend" {
   sku_name            = "B1"
 }
 
-# -----------------------------
-# 2.3 Backend App Service (PHP)
-# -----------------------------
 resource "azurerm_linux_web_app" "backend" {
   name                = var.app_service_name
   location            = var.location
@@ -129,15 +111,12 @@ resource "azurerm_linux_web_app" "backend" {
     APP_KEY       = "base64:VwPBpk2jFkp2o1Y32nMP8hjuugrCeADr0HdmT8ku6Ro="
     DB_CONNECTION = "sqlsrv"
     DB_HOST       = azurerm_mssql_server.sql_server.fully_qualified_domain_name
-    DB_DATABASE   = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/DB_DATABASE/)"
-    DB_USERNAME   = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/DB_USERNAME/)"
-    DB_PASSWORD   = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/DB_PASSWORD/)"
+    DB_DATABASE   = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/DB-DATABASE/)"
+    DB_USERNAME   = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/DB-USERNAME/)"
+    DB_PASSWORD   = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/DB-PASSWORD/)"
   }
 }
 
-# -----------------------------
-# 2.4 Frontend App Service (Node)
-# -----------------------------
 resource "azurerm_windows_web_app" "frontend" {
   name                = var.app_service_name_web
   location            = var.location
@@ -156,9 +135,6 @@ resource "azurerm_windows_web_app" "frontend" {
   }
 }
 
-# -----------------------------
-# 2.5 Integración del backend con subnet-integration
-# -----------------------------
 resource "azurerm_app_service_virtual_network_swift_connection" "backend_vnet" {
   app_service_id = azurerm_linux_web_app.backend.id
   subnet_id      = azurerm_subnet.subnet_integration.id
@@ -218,12 +194,12 @@ resource "azurerm_application_gateway" "appgw" {
 
   backend_address_pool {
     name         = "pool-backend"
-    ip_addresses = [azurerm_linux_web_app.backend.outbound_ip_addresses[0]]
+    ip_addresses = azurerm_linux_web_app.backend.outbound_ip_addresses
   }
 
   backend_address_pool {
     name         = "pool-frontend"
-    ip_addresses = [azurerm_windows_web_app.frontend.outbound_ip_addresses[0]]
+    ip_addresses = azurerm_windows_web_app.frontend.outbound_ip_addresses
   }
 
   backend_http_settings {
@@ -297,37 +273,34 @@ resource "azurerm_application_gateway" "appgw" {
 # 4.0 - Key Vault, SQL Server, Blob Storage
 # ============================================================
 
-# 4.1 Key Vault
 resource "azurerm_key_vault" "keyvault" {
-  name                       = var.key_vault_name
-  location                   = var.location
-  resource_group_name         = azurerm_resource_group.rg.name
-  tenant_id                   = var.tenant_id
-  sku_name                    = "standard"
-  soft_delete_retention_days  = 7
-  purge_protection_enabled    = false
+  name                      = var.key_vault_name
+  location                  = var.location
+  resource_group_name       = azurerm_resource_group.rg.name
+  tenant_id                 = var.tenant_id
+  sku_name                  = "standard"
+  soft_delete_retention_days = 7
+  purge_protection_enabled   = false
 }
 
-# 4.2 Secretos del Key Vault
 resource "azurerm_key_vault_secret" "db_name" {
-  name         = "DB_DATABASE"
+  name         = "DB-DATABASE"
   value        = var.database_name
   key_vault_id = azurerm_key_vault.keyvault.id
 }
 
 resource "azurerm_key_vault_secret" "db_user" {
-  name         = "DB_USERNAME"
+  name         = "DB-USERNAME"
   value        = var.sql_admin_login
   key_vault_id = azurerm_key_vault.keyvault.id
 }
 
 resource "azurerm_key_vault_secret" "db_pass" {
-  name         = "DB_PASSWORD"
+  name         = "DB-PASSWORD"
   value        = var.sql_admin_password
   key_vault_id = azurerm_key_vault.keyvault.id
 }
 
-# 4.3 SQL Server y Base de Datos
 resource "azurerm_mssql_server" "sql_server" {
   name                          = var.sql_server_name
   resource_group_name           = azurerm_resource_group.rg.name
@@ -344,7 +317,6 @@ resource "azurerm_mssql_database" "database" {
   sku_name  = "Basic"
 }
 
-# 4.4 Blob Storage
 resource "azurerm_storage_account" "storage" {
   name                     = var.storage_account_name
   resource_group_name      = azurerm_resource_group.rg.name
@@ -353,7 +325,6 @@ resource "azurerm_storage_account" "storage" {
   account_replication_type = "LRS"
 }
 
-# 4.5 Asignación de permisos Key Vault para el backend
 resource "azurerm_role_assignment" "backend_kv" {
   scope                = azurerm_key_vault.keyvault.id
   role_definition_name = "Key Vault Secrets User"
