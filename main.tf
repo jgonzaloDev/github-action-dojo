@@ -54,7 +54,6 @@ resource "azurerm_subnet" "subnet_appservices" {
   }
 }
 
-# ✅ Delegación agregada para integración de App Service
 resource "azurerm_subnet" "subnet_integration" {
   name                 = "subnet-integration"
   resource_group_name  = azurerm_resource_group.rg.name
@@ -78,7 +77,28 @@ resource "azurerm_subnet" "subnet_pe" {
 }
 
 # ============================================================
-# 2.0 - SQL SERVER Y BASE DE DATOS (debe ir antes de App Services)
+# 2.0 - KEY VAULT
+# ============================================================
+
+resource "azurerm_key_vault" "keyvault" {
+  name                       = var.key_vault_name
+  location                   = var.location
+  resource_group_name        = azurerm_resource_group.rg.name
+  tenant_id                  = var.tenant_id
+  sku_name                   = "standard"
+  soft_delete_retention_days = 7
+  purge_protection_enabled   = false
+}
+
+# ✅ Rol para GitHub Actions (OIDC) con permisos de administrador del Key Vault
+resource "azurerm_role_assignment" "github_actions_kv_admin" {
+  scope                = azurerm_key_vault.keyvault.id
+  role_definition_name = "Key Vault Administrator"
+  principal_id         = var.azure_client_id
+}
+
+# ============================================================
+# 3.0 - SQL SERVER Y BASE DE DATOS
 # ============================================================
 
 resource "azurerm_mssql_server" "sql_server" {
@@ -98,7 +118,7 @@ resource "azurerm_mssql_database" "database" {
 }
 
 # ============================================================
-# 3.0 - APP SERVICES
+# 4.0 - APP SERVICES
 # ============================================================
 
 resource "azurerm_service_plan" "plan_backend" {
@@ -132,7 +152,6 @@ resource "azurerm_linux_web_app" "backend" {
     application_stack {
       php_version = "8.2"
     }
-    app_command_line = "cp /home/site/wwwroot/default /etc/nginx/sites-available/default && service nginx reload"
   }
 
   app_settings = {
@@ -147,9 +166,17 @@ resource "azurerm_linux_web_app" "backend" {
   }
 
   depends_on = [
-    azurerm_mssql_server.sql_server,
-    azurerm_key_vault.keyvault
+    azurerm_key_vault.keyvault,
+    azurerm_role_assignment.github_actions_kv_admin
   ]
+}
+
+# ✅ Rol del backend para leer secretos del Key Vault
+resource "azurerm_role_assignment" "backend_kv" {
+  scope                = azurerm_key_vault.keyvault.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_linux_web_app.backend.identity[0].principal_id
+  depends_on           = [azurerm_linux_web_app.backend]
 }
 
 resource "azurerm_windows_web_app" "frontend" {
@@ -168,48 +195,11 @@ resource "azurerm_windows_web_app" "frontend" {
   app_settings = {
     WEBSITE_NODE_DEFAULT_VERSION = "~22"
   }
-
-  depends_on = [
-    azurerm_linux_web_app.backend
-  ]
-}
-
-resource "azurerm_app_service_virtual_network_swift_connection" "backend_vnet" {
-  app_service_id = azurerm_linux_web_app.backend.id
-  subnet_id      = azurerm_subnet.subnet_integration.id
 }
 
 # ============================================================
-# 4.0 - KEY VAULT, STORAGE Y PERMISOS
+# 5.0 - STORAGE ACCOUNT
 # ============================================================
-
-resource "azurerm_key_vault" "keyvault" {
-  name                       = var.key_vault_name
-  location                   = var.location
-  resource_group_name        = azurerm_resource_group.rg.name
-  tenant_id                  = var.tenant_id
-  sku_name                   = "standard"
-  soft_delete_retention_days = 7
-  purge_protection_enabled   = false
-}
-
-resource "azurerm_key_vault_secret" "db_name" {
-  name         = "db-database"
-  value        = var.database_name
-  key_vault_id = azurerm_key_vault.keyvault.id
-}
-
-resource "azurerm_key_vault_secret" "db_user" {
-  name         = "db-username"
-  value        = var.sql_admin_login
-  key_vault_id = azurerm_key_vault.keyvault.id
-}
-
-resource "azurerm_key_vault_secret" "db_pass" {
-  name         = "db-password"
-  value        = var.sql_admin_password
-  key_vault_id = azurerm_key_vault.keyvault.id
-}
 
 resource "azurerm_storage_account" "storage" {
   name                     = var.storage_account_name
@@ -219,16 +209,185 @@ resource "azurerm_storage_account" "storage" {
   account_replication_type = "LRS"
 }
 
-# ✅ Rol del backend para leer secretos del Key Vault
-resource "azurerm_role_assignment" "backend_kv" {
-  scope                = azurerm_key_vault.keyvault.id
-  role_definition_name = "Key Vault Secrets User"
-  principal_id         = azurerm_linux_web_app.backend.identity[0].principal_id
+# ============================================================
+# 6.0 - PRIVATE ENDPOINTS
+# ============================================================
+
+resource "azurerm_private_endpoint" "pe_sql" {
+  name                = "pe-sql"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = azurerm_subnet.subnet_pe.id
+
+  private_service_connection {
+    name                           = "sql-connection"
+    private_connection_resource_id = azurerm_mssql_server.sql_server.id
+    subresource_names              = ["sqlServer"]
+    is_manual_connection           = false
+  }
 }
 
-# ✅ Rol para GitHub Actions (OIDC) con permisos de administrador del Key Vault
-resource "azurerm_role_assignment" "github_actions_kv_admin" {
-  scope                = azurerm_key_vault.keyvault.id
-  role_definition_name = "Key Vault Administrator"
-  principal_id         = var.azure_client_id
+resource "azurerm_private_endpoint" "backend_pe" {
+  name                = "pe-backend"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = azurerm_subnet.subnet_pe.id
+
+  private_service_connection {
+    name                           = "backend-connection"
+    private_connection_resource_id = azurerm_linux_web_app.backend.id
+    subresource_names              = ["sites"]
+    is_manual_connection           = false
+  }
+}
+
+resource "azurerm_private_endpoint" "frontend_pe" {
+  name                = "pe-frontend"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = azurerm_subnet.subnet_pe.id
+
+  private_service_connection {
+    name                           = "frontend-connection"
+    private_connection_resource_id = azurerm_windows_web_app.frontend.id
+    subresource_names              = ["sites"]
+    is_manual_connection           = false
+  }
+}
+
+# ============================================================
+# 7.0 - APPLICATION GATEWAY (Standard_v2)
+# ============================================================
+
+resource "azurerm_public_ip" "appgw_ip" {
+  name                = "appgw-publicip"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.rg.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+}
+
+resource "azurerm_application_gateway" "appgw" {
+  name                = "appgw-dojo"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  sku {
+    name     = "Standard_v2"
+    tier     = "Standard_v2"
+    capacity = 2
+  }
+
+  gateway_ip_configuration {
+    name      = "appgw-ip-config"
+    subnet_id = azurerm_subnet.subnet_agw.id
+  }
+
+  frontend_ip_configuration {
+    name                 = "appgw-frontend-ip"
+    public_ip_address_id = azurerm_public_ip.appgw_ip.id
+  }
+
+  frontend_port {
+    name = "frontendPort443"
+    port = 443
+  }
+
+  ssl_certificate {
+    name     = "cert-app-dojo"
+    data     = var.cert_data
+    password = var.cert_password
+  }
+
+  http_listener {
+    name                           = "listener-https"
+    frontend_ip_configuration_name = "appgw-frontend-ip"
+    frontend_port_name             = "frontendPort443"
+    protocol                       = "Https"
+    ssl_certificate_name           = "cert-app-dojo"
+  }
+
+  backend_address_pool {
+    name         = "pool-backend"
+    ip_addresses = [azurerm_private_endpoint.backend_pe.private_service_connection[0].private_ip_address]
+  }
+
+  backend_address_pool {
+    name         = "pool-frontend"
+    ip_addresses = [azurerm_private_endpoint.frontend_pe.private_service_connection[0].private_ip_address]
+  }
+
+  backend_http_settings {
+    name                  = "setting-backend"
+    port                  = 443
+    protocol              = "Https"
+    request_timeout       = 20
+    probe_name            = "probe-backend"
+    host_name             = azurerm_linux_web_app.backend.default_hostname
+    cookie_based_affinity = "Disabled"
+  }
+
+  backend_http_settings {
+    name                  = "setting-frontend"
+    port                  = 443
+    protocol              = "Https"
+    request_timeout       = 20
+    probe_name            = "probe-frontend"
+    host_name             = azurerm_windows_web_app.frontend.default_hostname
+    cookie_based_affinity = "Disabled"
+  }
+
+  probe {
+    name                = "probe-backend"
+    protocol            = "Https"
+    host                = azurerm_linux_web_app.backend.default_hostname
+    path                = "/api/alumnos"
+    interval            = 30
+    timeout             = 30
+    unhealthy_threshold = 3
+    match {
+      status_code = ["200-399"]
+    }
+  }
+
+  probe {
+    name                = "probe-frontend"
+    protocol            = "Https"
+    host                = azurerm_windows_web_app.frontend.default_hostname
+    path                = "/"
+    interval            = 30
+    timeout             = 30
+    unhealthy_threshold = 3
+    match {
+      status_code = ["200-399"]
+    }
+  }
+
+  url_path_map {
+    name                               = "url-path-map"
+    default_backend_address_pool_name  = "pool-frontend"
+    default_backend_http_settings_name = "setting-frontend"
+
+    path_rule {
+      name                       = "frontend-rule"
+      paths                      = ["/web/*"]
+      backend_address_pool_name  = "pool-frontend"
+      backend_http_settings_name = "setting-frontend"
+    }
+
+    path_rule {
+      name                       = "backend-rule"
+      paths                      = ["/api/*"]
+      backend_address_pool_name  = "pool-backend"
+      backend_http_settings_name = "setting-backend"
+    }
+  }
+
+  request_routing_rule {
+    name               = "rule-path-routing"
+    rule_type          = "PathBasedRouting"
+    http_listener_name = "listener-https"
+    url_path_map_name  = "url-path-map"
+    priority           = 100
+  }
 }
