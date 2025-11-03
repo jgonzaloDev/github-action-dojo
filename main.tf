@@ -90,28 +90,18 @@ resource "azurerm_key_vault" "keyvault" {
   purge_protection_enabled   = false
 }
 
-# ============================================================
-# Rol para GitHub Actions (OIDC) con acceso al Key Vault
-# ============================================================
-
-# Este bloque asigna permisos al Client ID federado de GitHub Actions.
-# Usa "Key Vault Secrets User" en lugar de "Key Vault Administrator"
-# para evitar errores de permisos y bucles de espera.
-# Además, solo se ejecuta si el client_id está definido.
-
+# ✅ Rol para GitHub Actions (OIDC) con permisos de administrador del Key Vault
 resource "azurerm_role_assignment" "github_actions_kv_admin" {
-  count                = var.azure_client_id != "" ? 1 : 0
+  scope                = azurerm_key_vault.keyvault.id
+  role_definition_name = "Key Vault Administrator"
+  principal_id         = var.azure_client_id
+}
+# ✅ Rol del backend para leer secretos del Key Vault
+resource "azurerm_role_assignment" "backend_kv" {
   scope                = azurerm_key_vault.keyvault.id
   role_definition_name = "Key Vault Secrets User"
-  principal_id         = var.azure_client_id
-
-  depends_on = [
-    azurerm_key_vault.keyvault
-  ]
-
-  lifecycle {
-    ignore_changes = [principal_id]
-  }
+  principal_id         = azurerm_linux_web_app.backend.identity[0].principal_id
+  depends_on           = [azurerm_linux_web_app.backend]
 }
 
 # ============================================================
@@ -186,14 +176,6 @@ resource "azurerm_linux_web_app" "backend" {
     azurerm_key_vault.keyvault,
     azurerm_role_assignment.github_actions_kv_admin
   ]
-}
-
-# ✅ Rol del backend para leer secretos del Key Vault
-resource "azurerm_role_assignment" "backend_kv" {
-  scope                = azurerm_key_vault.keyvault.id
-  role_definition_name = "Key Vault Secrets User"
-  principal_id         = azurerm_linux_web_app.backend.identity[0].principal_id
-  depends_on           = [azurerm_linux_web_app.backend]
 }
 
 resource "azurerm_windows_web_app" "frontend" {
