@@ -11,25 +11,25 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
+      id-token: write
       contents: read
 
     steps:
-      # =========================================================
-      # 1️⃣ Clonar el repositorio
-      # =========================================================
       - name: Checkout repo
         uses: actions/checkout@v4
 
       # =========================================================
-      # 2️⃣ Login en Azure con Service Principal persistente
+      # Azure Login (OIDC)
       # =========================================================
-      - name: Azure Login (Service Principal)
+      - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       # =========================================================
-      # 3️⃣ Configurar Terraform
+      # Setup Terraform
       # =========================================================
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -38,11 +38,13 @@ jobs:
         run: terraform init
 
       # =========================================================
-      # 4️⃣ Terraform Apply (Despliegue completo)
+      # Terraform Apply
       # =========================================================
       - name: Terraform Apply
         run: terraform apply -auto-approve
         env:
+          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
           TF_VAR_resource_group_name: ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
           TF_VAR_location: ${{ secrets.TF_VAR_LOCATION }}
           TF_VAR_vnet_name: ${{ secrets.TF_VAR_VNET_NAME }}
@@ -57,5 +59,7 @@ jobs:
           TF_VAR_app_service_name_web: ${{ secrets.TF_VAR_APP_SERVICE_NAME_WEB }}
           TF_VAR_key_vault_name: ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
           TF_VAR_storage_account_name: ${{ secrets.TF_VAR_STORAGE_ACCOUNT_NAME }}
-          TF_VAR_cert_data: ${{ secrets.TF_VAR_CERT_DATA }}
+          TF_VAR_cert_data: ${{ secrets.TF_VAR_cert_data }}
           TF_VAR_cert_password: ${{ secrets.TF_VAR_CERT_PASSWORD }}
+          # ✅ Agregado: pasamos el Client ID de GitHub OIDC a Terraform
+          TF_VAR_azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
