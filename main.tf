@@ -159,8 +159,7 @@ resource "azurerm_linux_web_app" "backend" {
   }
 
   depends_on = [
-    azurerm_key_vault.keyvault,
-    azurerm_role_assignment.github_actions_kv_admin
+    azurerm_key_vault.keyvault
   ]
 }
 
