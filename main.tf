@@ -90,20 +90,6 @@ resource "azurerm_key_vault" "keyvault" {
   purge_protection_enabled   = false
 }
 
-# ✅ Rol para GitHub Actions (OIDC) con permisos de administrador del Key Vault
-resource "azurerm_role_assignment" "github_actions_kv_admin" {
-  scope                = azurerm_key_vault.keyvault.id
-  role_definition_name = "Key Vault Administrator"
-  principal_id         = var.azure_client_id
-}
-# ✅ Rol del backend para leer secretos del Key Vault
-resource "azurerm_role_assignment" "backend_kv" {
-  scope                = azurerm_key_vault.keyvault.id
-  role_definition_name = "Key Vault Secrets User"
-  principal_id         = azurerm_linux_web_app.backend.identity[0].principal_id
-  depends_on           = [azurerm_linux_web_app.backend]
-}
-
 # ============================================================
 # 3.0 - SQL SERVER Y BASE DE DATOS
 # ============================================================
@@ -322,7 +308,7 @@ resource "azurerm_application_gateway" "appgw" {
     protocol              = "Https"
     request_timeout       = 20
     probe_name            = "probe-backend"
-    host_name             = azurerm_linux_web_app.backend.default_hostname
+    host_name             = "api-backend-dojo.azurewebsites.net"
     cookie_based_affinity = "Disabled"
   }
 
@@ -332,14 +318,14 @@ resource "azurerm_application_gateway" "appgw" {
     protocol              = "Https"
     request_timeout       = 20
     probe_name            = "probe-frontend"
-    host_name             = azurerm_windows_web_app.frontend.default_hostname
+    host_name             = "front22.azurewebsites.net"
     cookie_based_affinity = "Disabled"
   }
 
   probe {
     name                = "probe-backend"
     protocol            = "Https"
-    host                = azurerm_linux_web_app.backend.default_hostname
+    host                = "api-backend-dojo.azurewebsites.net"
     path                = "/api/alumnos"
     interval            = 30
     timeout             = 30
@@ -352,7 +338,7 @@ resource "azurerm_application_gateway" "appgw" {
   probe {
     name                = "probe-frontend"
     protocol            = "Https"
-    host                = azurerm_windows_web_app.frontend.default_hostname
+    host                = "front22.azurewebsites.net"
     path                = "/"
     interval            = 30
     timeout             = 30
