@@ -14,14 +14,16 @@ provider "azurerm" {
 }
 
 # ============================================================
-# 1.0 - GRUPO DE RECURSOS Y RED VIRTUAL
+# 0.1 - GRUPO DE RECURSOS
 # ============================================================
 
 resource "azurerm_resource_group" "rg" {
   name     = var.resource_group_name
   location = var.location
 }
-
+# ============================================================
+# 0.2 - RED VIRTUAL
+# ============================================================
 resource "azurerm_virtual_network" "vnet" {
   name                = var.vnet_name
   location            = var.location
@@ -30,7 +32,7 @@ resource "azurerm_virtual_network" "vnet" {
 }
 
 # -----------------------------
-# 1.1 SUBNETS
+# 0.2.1 - SUBNETS
 # -----------------------------
 resource "azurerm_subnet" "subnet_agw" {
   name                 = "subnet-agw"
@@ -77,41 +79,7 @@ resource "azurerm_subnet" "subnet_pe" {
 }
 
 # ============================================================
-# 2.0 - KEY VAULT
-# ============================================================
-
-resource "azurerm_key_vault" "keyvault" {
-  name                       = var.key_vault_name
-  location                   = var.location
-  resource_group_name        = azurerm_resource_group.rg.name
-  tenant_id                  = var.tenant_id
-  sku_name                   = "standard"
-  soft_delete_retention_days = 7
-  purge_protection_enabled   = false
-}
-
-# ============================================================
-# 3.0 - SQL SERVER Y BASE DE DATOS
-# ============================================================
-
-resource "azurerm_mssql_server" "sql_server" {
-  name                          = var.sql_server_name
-  resource_group_name           = azurerm_resource_group.rg.name
-  location                      = var.location
-  version                       = "12.0"
-  administrator_login           = var.sql_admin_login
-  administrator_login_password  = var.sql_admin_password
-  public_network_access_enabled = false
-}
-
-resource "azurerm_mssql_database" "database" {
-  name      = var.database_name
-  server_id = azurerm_mssql_server.sql_server.id
-  sku_name  = "Basic"
-}
-
-# ============================================================
-# 4.0 - APP SERVICES
+#- APP SERVICES PLAN BACKEND
 # ============================================================
 
 resource "azurerm_service_plan" "plan_backend" {
@@ -121,15 +89,9 @@ resource "azurerm_service_plan" "plan_backend" {
   os_type             = "Linux"
   sku_name            = "B1"
 }
-
-resource "azurerm_service_plan" "plan_frontend" {
-  name                = var.app_service_plan_name_web
-  location            = var.location
-  resource_group_name = azurerm_resource_group.rg.name
-  os_type             = "Windows"
-  sku_name            = "B1"
-}
-
+# ============================================================
+# 1.0 - APP SERVICES BACKEND
+# ============================================================
 resource "azurerm_linux_web_app" "backend" {
   name                = var.app_service_name
   location            = var.location
@@ -162,7 +124,117 @@ resource "azurerm_linux_web_app" "backend" {
     azurerm_key_vault.keyvault
   ]
 }
+# ============================================================
+# 1.1 - KEY VAULT
+# ============================================================
 
+resource "azurerm_key_vault" "keyvault" {
+  name                       = var.key_vault_name
+  location                   = var.location
+  resource_group_name        = azurerm_resource_group.rg.name
+  tenant_id                  = var.tenant_id
+  sku_name                   = "standard"
+  soft_delete_retention_days = 7
+  purge_protection_enabled   = false
+}
+
+# ============================================================
+# 1.2 - SQL SERVER Y BASE DE DATOS
+# ============================================================
+
+resource "azurerm_mssql_server" "sql_server" {
+  name                          = var.sql_server_name
+  resource_group_name           = azurerm_resource_group.rg.name
+  location                      = var.location
+  version                       = "12.0"
+  administrator_login           = var.sql_admin_login
+  administrator_login_password  = var.sql_admin_password
+  public_network_access_enabled = false
+}
+
+resource "azurerm_mssql_database" "database" {
+  name      = var.database_name
+  server_id = azurerm_mssql_server.sql_server.id
+  sku_name  = "Basic"
+}
+# ============================================================
+# 1.3 - STORAGE ACCOUNT
+# ============================================================
+
+resource "azurerm_storage_account" "storage" {
+  name                     = var.storage_account_name
+  resource_group_name      = azurerm_resource_group.rg.name
+  location                 = var.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+}
+
+# ============================================================
+# 1.4 - PRIVATE ENDPOINTS SQL
+# ============================================================
+
+resource "azurerm_private_endpoint" "pe_sql" {
+  name                = "pe-sql"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = azurerm_subnet.subnet_pe.id
+
+  private_service_connection {
+    name                           = "sql-connection"
+    private_connection_resource_id = azurerm_mssql_server.sql_server.id
+    subresource_names              = ["sqlServer"]
+    is_manual_connection           = false
+  }
+}
+
+# ============================================================
+# 1.5 - PRIVATE ENDPOINTS FRONT
+# ============================================================
+
+resource "azurerm_private_endpoint" "frontend_pe" {
+  name                = "pe-frontend"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = azurerm_subnet.subnet_pe.id
+
+  private_service_connection {
+    name                           = "frontend-connection"
+    private_connection_resource_id = azurerm_windows_web_app.frontend.id
+    subresource_names              = ["sites"]
+    is_manual_connection           = false
+  }
+}
+# ============================================================
+# 1.6 - PRIVATE ENDPOINTS BACKEND
+# ============================================================
+resource "azurerm_private_endpoint" "backend_pe" {
+  name                = "pe-backend"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = azurerm_subnet.subnet_pe.id
+
+  private_service_connection {
+    name                           = "backend-connection"
+    private_connection_resource_id = azurerm_linux_web_app.backend.id
+    subresource_names              = ["sites"]
+    is_manual_connection           = false
+  }
+}
+
+# ============================================================
+# - APP SERVICES PLAN FRONT
+# ============================================================
+resource "azurerm_service_plan" "plan_frontend" {
+  name                = var.app_service_plan_name_web
+  location            = var.location
+  resource_group_name = azurerm_resource_group.rg.name
+  os_type             = "Windows"
+  sku_name            = "B1"
+}
+
+# ============================================================
+# 2.0 - APP SERVICES FRONT
+# ============================================================
 resource "azurerm_windows_web_app" "frontend" {
   name                = var.app_service_name_web
   location            = var.location
@@ -182,65 +254,7 @@ resource "azurerm_windows_web_app" "frontend" {
 }
 
 # ============================================================
-# 5.0 - STORAGE ACCOUNT
-# ============================================================
-
-resource "azurerm_storage_account" "storage" {
-  name                     = var.storage_account_name
-  resource_group_name      = azurerm_resource_group.rg.name
-  location                 = var.location
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
-}
-
-# ============================================================
-# 6.0 - PRIVATE ENDPOINTS
-# ============================================================
-
-resource "azurerm_private_endpoint" "pe_sql" {
-  name                = "pe-sql"
-  location            = var.location
-  resource_group_name = azurerm_resource_group.rg.name
-  subnet_id           = azurerm_subnet.subnet_pe.id
-
-  private_service_connection {
-    name                           = "sql-connection"
-    private_connection_resource_id = azurerm_mssql_server.sql_server.id
-    subresource_names              = ["sqlServer"]
-    is_manual_connection           = false
-  }
-}
-
-resource "azurerm_private_endpoint" "backend_pe" {
-  name                = "pe-backend"
-  location            = var.location
-  resource_group_name = azurerm_resource_group.rg.name
-  subnet_id           = azurerm_subnet.subnet_pe.id
-
-  private_service_connection {
-    name                           = "backend-connection"
-    private_connection_resource_id = azurerm_linux_web_app.backend.id
-    subresource_names              = ["sites"]
-    is_manual_connection           = false
-  }
-}
-
-resource "azurerm_private_endpoint" "frontend_pe" {
-  name                = "pe-frontend"
-  location            = var.location
-  resource_group_name = azurerm_resource_group.rg.name
-  subnet_id           = azurerm_subnet.subnet_pe.id
-
-  private_service_connection {
-    name                           = "frontend-connection"
-    private_connection_resource_id = azurerm_windows_web_app.frontend.id
-    subresource_names              = ["sites"]
-    is_manual_connection           = false
-  }
-}
-
-# ============================================================
-# 7.0 - APPLICATION GATEWAY (Standard_v2)
+# 3.0
 # ============================================================
 
 resource "azurerm_public_ip" "appgw_ip" {
@@ -375,3 +389,4 @@ resource "azurerm_application_gateway" "appgw" {
     priority           = 100
   }
 }
+
