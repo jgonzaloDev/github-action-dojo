@@ -130,7 +130,7 @@ resource "azurerm_linux_web_app" "backend" {
 # ======================
 resource "azurerm_app_service_virtual_network_swift_connection" "subnet_integration" {
   app_service_id = azurerm_linux_web_app.backend.id
-  subnet_id      = azurerm_subnet.backend.id
+  subnet_id      = azurerm_subnet.subnet_integration.id
 }
 # ============================================================
 # 1.1 - KEY VAULT
