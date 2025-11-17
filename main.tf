@@ -107,6 +107,7 @@ resource "azurerm_linux_web_app" "backend" {
     application_stack {
       php_version = "8.2"
     }
+    app_command_line = "cp /home/site/wwwroot/default /etc/nginx/sites-available/default && service nginx reload"
   }
 
   app_settings = {
@@ -123,6 +124,13 @@ resource "azurerm_linux_web_app" "backend" {
   depends_on = [
     azurerm_key_vault.keyvault
   ]
+}
+# ======================
+# VNet Integration
+# ======================
+resource "azurerm_app_service_virtual_network_swift_connection" "subnet_integration" {
+  app_service_id = azurerm_linux_web_app.backend.id
+  subnet_id      = azurerm_subnet.backend.id
 }
 # ============================================================
 # 1.1 - KEY VAULT
