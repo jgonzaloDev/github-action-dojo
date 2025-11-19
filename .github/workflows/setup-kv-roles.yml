@@ -1,13 +1,10 @@
-name: KeyVault Role & Secrets Setup
+name: Setup KeyVault Roles (Only Roles)
 
 on:
-  workflow_dispatch: # puedes ejecutarlo manualmente
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
-  setup-keyvault:
+  setup-roles:
     runs-on: ubuntu-latest
 
     permissions:
@@ -15,83 +12,28 @@ jobs:
       contents: read
 
     steps:
-      # =========================================================
-      # 1️⃣ Checkout del repositorio
-      # =========================================================
-      - name: Checkout repository
+      # 1️⃣ Clonar repo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      # =========================================================
-      # 2️⃣ Autenticación con Service Principal persistente
-      # =========================================================
-      - name: Azure Login
+      # 2️⃣ Login en Azure OIDC
+      - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # =========================================================
-      # 3️⃣ Variables base
-      # =========================================================
-      - name: Define key environment variables
-        run: |
-          echo "RESOURCE_GROUP=Dojo_Develop" >> $GITHUB_ENV
-          echo "LOCATION=${{ secrets.TF_VAR_LOCATION }}" >> $GITHUB_ENV
-          echo "KEYVAULT_NAME=${{ secrets.TF_VAR_KEY_VAULT_NAME }}" >> $GITHUB_ENV
-          echo "BACKEND_APP=${{ secrets.TF_VAR_APP_SERVICE_NAME }}" >> $GITHUB_ENV
-          echo "DB_USER=${{ secrets.TF_VAR_SQL_ADMIN_LOGIN }}" >> $GITHUB_ENV
-          echo "DB_PASSWORD=${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}" >> $GITHUB_ENV
-          echo "DB_NAME=${{ secrets.TF_VAR_DATABASE_NAME }}" >> $GITHUB_ENV
+      # 3️⃣ Instalar Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.6.6
 
-      # =========================================================
-      # 4️⃣ Obtener identidad administrada del backend
-      # =========================================================
-      - name: Get backend Managed Identity
-        id: mi
-        run: |
-          principal_id=$(az webapp identity show \
-            --name $BACKEND_APP \
-            --resource-group $RESOURCE_GROUP \
-            --query principalId -o tsv)
-          echo "PRINCIPAL_ID=$principal_id" >> $GITHUB_ENV
-          echo "🔹 Managed Identity del backend: $principal_id"
+      # 4️⃣ Terraform Init
+      - name: Terraform Init
+        run: terraform init
 
-      # =========================================================
-      # 5️⃣ Asignar roles RBAC al Key Vault
-      # =========================================================
-      - name: Assign RBAC roles on Key Vault
-        run: |
-          vault_id=$(az keyvault show --name $KEYVAULT_NAME --query id -o tsv)
-
-          echo "🔹 Asignando permisos Key Vault Secrets User..."
-          az role assignment create \
-            --assignee $PRINCIPAL_ID \
-            --role "Key Vault Secrets User" \
-            --scope $vault_id || echo "Rol ya existente o asignado"
-
-          echo "🔹 Asignando permisos Key Vault Secrets Officer..."
-          az role assignment create \
-            --assignee $PRINCIPAL_ID \
-            --role "Key Vault Secrets Officer" \
-            --scope $vault_id || echo "Rol ya existente o asignado"
-
-      # =========================================================
-      # 6️⃣ Crear secretos cifrados en el Key Vault
-      # =========================================================
-      - name: Create or update secrets in Key Vault
-        run: |
-          az keyvault secret set --vault-name $KEYVAULT_NAME --name "db-username" --value "$DB_USER"
-          az keyvault secret set --vault-name $KEYVAULT_NAME --name "db-password" --value "$DB_PASSWORD"
-          az keyvault secret set --vault-name $KEYVAULT_NAME --name "db-database" --value "$DB_NAME"
-
-      # =========================================================
-      # 7️⃣ Configurar variables de entorno del App Service (Key Vault references)
-      # =========================================================
-      - name: Update App Service configuration
-        run: |
-          az webapp config appsettings set \
-            --name $BACKEND_APP \
-            --resource-group $RESOURCE_GROUP \
-            --settings \
-              DB_USERNAME="@Microsoft.KeyVault(SecretUri=https://${KEYVAULT_NAME}.vault.azure.net/secrets/db-username/)" \
-              DB_PASSWORD="@Microsoft.KeyVault(SecretUri=https://${KEYVAULT_NAME}.vault.azure.net/secrets/db-password/)" \
-              DB_DATABASE="@Microsoft.KeyVault(SecretUri=https://${KEYVAULT_NAME}.vault.azure.net/secrets/db-database/)"
+      # 5️⃣ Aplicar SOLO el rol KeyVault
+      - name: Apply KeyVault Role (Backend Secrets Officer)
+        run: terraform apply -auto-approve -target=azurerm_role_assignment.kv_secrets_officer_backend
