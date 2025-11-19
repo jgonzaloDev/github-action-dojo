@@ -12,11 +12,9 @@ jobs:
       contents: read
 
     steps:
-      # 1️⃣ Clonar repo
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # 2️⃣ Login Azure (OIDC)
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
@@ -24,20 +22,16 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # 3️⃣ Instalar Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.6.6
 
-      # 4️⃣ Terraform Init
       - name: Terraform Init
+        working-directory: infra     # 👈 IMPORTANTE
         run: terraform init
 
-      # 5️⃣ Crear SOLO el rol del App Service Backend para KeyVault
       - name: Apply KeyVault Role (Backend Secrets Officer)
+        working-directory: infra     # 👈 IMPORTANTE
         run: terraform apply -auto-approve -target=azurerm_role_assignment.kv_secrets_officer_backend
-        env:
-          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
-          TF_VAR_key_vault_name: ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
+
