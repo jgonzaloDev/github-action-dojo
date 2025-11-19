@@ -144,6 +144,10 @@ resource "azurerm_key_vault" "keyvault" {
   sku_name                   = "standard"
   soft_delete_retention_days = 7
   purge_protection_enabled   = false
+
+   # 🔥 AGREGAR ESTO PARA PERMITIR ROLES RBAC 🔥
+  access_policy = []
+  enable_rbac_authorization = true
 }
 
 # ============================================================
