@@ -1,4 +1,4 @@
-name: Setup KeyVault Roles
+name: Setup KeyVault Roles (Only Roles)
 
 on:
   workflow_dispatch:
@@ -12,40 +12,34 @@ jobs:
       contents: read
 
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-    - name: Azure Login (OIDC)
-      uses: azure/login@v2
-      with:
-        client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
 
-    - name: Terraform Init
-      working-directory: infra
-      run: terraform init
+      - name: Terraform Init
+        working-directory: infra
+        run: terraform init
 
-    - name: Terraform Plan (solo roles)
-      working-directory: infra
-      run: terraform plan \
-        -target=azurerm_role_assignment.kv_secrets_officer_github \
-        -target=azurerm_role_assignment.kv_secrets_user_backend
-
-    - name: Terraform Apply (solo roles)
-      working-directory: infra
-      run: terraform apply -auto-approve \
-        -target=azurerm_role_assignment.kv_secrets_officer_github \
-        -target=azurerm_role_assignment.kv_secrets_user_backend
-
-      env:
-        TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
-        TF_VAR_resource_group_name: ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
-        TF_VAR_location: ${{ secrets.TF_VAR_LOCATION }}
-        TF_VAR_app_service_name: ${{ secrets.TF_VAR_APP_SERVICE_NAME }}
-        TF_VAR_key_vault_name: ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
-        TF_VAR_azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+      - name: Terraform Apply Roles
+        working-directory: infra
+        run: |
+          terraform apply -auto-approve \
+            -target=azurerm_role_assignment.kv_secrets_officer_github \
+            -target=azurerm_role_assignment.kv_secrets_user_backend
+        env:
+          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          TF_VAR_resource_group_name: ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
+          TF_VAR_location: ${{ secrets.TF_VAR_LOCATION }}
+          TF_VAR_key_vault_name: ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
+          TF_VAR_app_service_name: ${{ secrets.TF_VAR_APP_SERVICE_NAME }}
+          TF_VAR_azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
