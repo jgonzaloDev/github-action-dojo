@@ -136,20 +136,6 @@ resource "azurerm_app_service_virtual_network_swift_connection" "subnet_integrat
 # 1.1 - KEY VAULT
 # ============================================================
 
-resource "azurerm_key_vault" "keyvault" {
-  name                       = var.key_vault_name
-  location                   = var.location
-  resource_group_name        = azurerm_resource_group.rg.name
-  tenant_id                  = var.tenant_id
-  sku_name                   = "standard"
-  soft_delete_retention_days = 7
-  purge_protection_enabled   = false
-
-   # 🔥 AGREGAR ESTO PARA PERMITIR ROLES RBAC 🔥
-  access_policy = []
-  enable_rbac_authorization = true
-}
-
 # ============================================================
 # 1.2 - SQL SERVER Y BASE DE DATOS
 # ============================================================
