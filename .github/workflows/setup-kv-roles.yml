@@ -1,10 +1,17 @@
-name: Setup KeyVault Roles (Only Roles)
+name: Setup KeyVault Secrets
 
 on:
   workflow_dispatch:
+    inputs:
+      secret_name:
+        description: "Nombre del secreto a crear o actualizar"
+        required: true
+      secret_value:
+        description: "Valor del secreto"
+        required: true
 
 jobs:
-  setup-roles:
+  set-secret:
     runs-on: ubuntu-latest
 
     permissions:
@@ -12,49 +19,22 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout repo
+      # 1️⃣ Checkout del repositorio
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Azure Login (OIDC)
+      # 2️⃣ Login en Azure usando OIDC (NO se necesitan claves)
+      - name: Azure Login
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Terraform Init
-        working-directory: infra
-        run: terraform init
-
-      - name: Apply Role (GitHub = Secrets Officer)
-        working-directory: infra
-        run: terraform apply -auto-approve -target=azurerm_role_assignment.kv_secrets_officer_github
-        env:
-          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
-
-          TF_VAR_resource_group_name: ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
-          TF_VAR_location: ${{ secrets.TF_VAR_LOCATION }}
-          TF_VAR_vnet_name: ${{ secrets.TF_VAR_VNET_NAME }}
-          TF_VAR_subnets: ${{ secrets.TF_VAR_SUBNETS }}
-
-          TF_VAR_key_vault_name: ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
-
-          # Identidad de GitHub OIDC
-          TF_VAR_azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
-
-          # Otros requeridos por el módulo
-          TF_VAR_sql_server_name: ${{ secrets.TF_VAR_SQL_SERVER_NAME }}
-          TF_VAR_database_name: ${{ secrets.TF_VAR_DATABASE_NAME }}
-          TF_VAR_sql_admin_login: ${{ secrets.TF_VAR_SQL_ADMIN_LOGIN }}
-          TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
-          TF_VAR_app_service_plan_name: ${{ secrets.TF_VAR_APP_SERVICE_PLAN_NAME }}
-          TF_VAR_app_service_plan_name_web: ${{ secrets.TF_VAR_APP_SERVICE_PLAN_NAME_WEB }}
-          TF_VAR_app_service_name: ${{ secrets.TF_VAR_APP_SERVICE_NAME }}
-          TF_VAR_app_service_name_web: ${{ secrets.TF_VAR_APP_SERVICE_NAME_WEB }}
-          TF_VAR_storage_account_name: ${{ secrets.TF_VAR_STORAGE_ACCOUNT_NAME }}
-          TF_VAR_cert_data: ${{ secrets.TF_VAR_cert_data }}
-          TF_VAR_cert_password: ${{ secrets.TF_VAR_CERT_PASSWORD }}
+      # 3️⃣ Crear o actualizar secreto en Key Vault
+      - name: Create or Update Secret in Key Vault
+        run: |
+          az keyvault secret set \
+            --vault-name ${{ secrets.TF_VAR_KEY_VAULT_NAME }} \
+            --name ${{ github.event.inputs.secret_name }} \
+            --value "${{ github.event.inputs.secret_value }}"
