@@ -12,9 +12,11 @@ jobs:
       contents: read
 
     steps:
+      # 1️⃣ Clonar repositorio
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      # 2️⃣ Login Azure OIDC
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
@@ -22,32 +24,37 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      # 3️⃣ Instalar Terraform
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.6.6
+        uses: hashicorp/setup-terraform@v3
 
+      # 4️⃣ Terraform Init en /infra
       - name: Terraform Init
         working-directory: infra
         run: terraform init
 
-      - name: Apply KeyVault Role (Backend Secrets Officer)
+      # 5️⃣ Crear ROL A: GitHub → Secrets Officer
+      - name: Apply Role (GitHub = Secrets Officer)
         working-directory: infra
-        run: terraform apply -auto-approve -target=azurerm_role_assignment.kv_secrets_officer_backend
+        run: terraform apply -auto-approve -target=azurerm_role_assignment.kv_secrets_officer_github
         env:
           TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
           TF_VAR_resource_group_name: ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
           TF_VAR_location: ${{ secrets.TF_VAR_LOCATION }}
-          TF_VAR_vnet_name: ${{ secrets.TF_VAR_VNET_NAME }}
-          TF_VAR_sql_server_name: ${{ secrets.TF_VAR_SQL_SERVER_NAME }}
-          TF_VAR_database_name: ${{ secrets.TF_VAR_DATABASE_NAME }}
-          TF_VAR_sql_admin_login: ${{ secrets.TF_VAR_SQL_ADMIN_LOGIN }}
-          TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
-          TF_VAR_app_service_plan_name: ${{ secrets.TF_VAR_APP_SERVICE_PLAN_NAME }}
-          TF_VAR_app_service_name: ${{ secrets.TF_VAR_APP_SERVICE_NAME }}
           TF_VAR_key_vault_name: ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
-          TF_VAR_storage_account_name: ${{ secrets.TF_VAR_STORAGE_ACCOUNT_NAME }}
-          TF_VAR_cert_data: ${{ secrets.TF_VAR_cert_data }}
-          TF_VAR_cert_password: ${{ secrets.TF_VAR_CERT_PASSWORD }}
           TF_VAR_azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+
+      # 6️⃣ Crear ROL B: Backend → Secrets User
+      - name: Apply Role (Backend = Secrets User)
+        working-directory: infra
+        run: terraform apply -auto-approve -target=azurerm_role_assignment.kv_secrets_user_backend
+        env:
+          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          TF_VAR_resource_group_name: ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
+          TF_VAR_location: ${{ secrets.TF_VAR_LOCATION }}
+          TF_VAR_key_vault_name: ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
+
+          # App Service identity
+          TF_VAR_app_service_name: ${{ secrets.TF_VAR_APP_SERVICE_NAME }}
