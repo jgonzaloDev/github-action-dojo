@@ -36,7 +36,8 @@ jobs:
         working-directory: infra
         run: |
           terraform apply -auto-approve \
-            -target=azurerm_key_vault.keyvault \
+            -target=azurerm_key_vault.keyvault
+          terraform apply -auto-approve \
             -target=azurerm_role_assignment.keyvault_admin
         env:
           TF_VAR_subscription_id:       ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -58,16 +59,15 @@ jobs:
       - name: Terraform Apply – fase 2
         working-directory: infra
         run: |
-          terraform apply -auto-approve \
-            -target=azurerm_key_vault_key.ci_cd_key \
-            -target=azurerm_key_vault_secret.db_username \
-            -target=azurerm_key_vault_secret.db_password \
-            -target=azurerm_key_vault_secret.db_database \
-            -target=azurerm_role_assignment.backend_kv_secrets \
-            -target=azurerm_private_endpoint.pe_keyvault \
-            -target=azurerm_private_dns_zone.kv_dns \
-            -target=azurerm_private_dns_zone_virtual_network_link.kv_dns_link \
-            -target=azurerm_private_dns_a_record.kv_a_record
+          terraform apply -auto-approve -target=azurerm_key_vault_key.ci_cd_key
+          terraform apply -auto-approve -target=azurerm_key_vault_secret.db_username
+          terraform apply -auto-approve -target=azurerm_key_vault_secret.db_password
+          terraform apply -auto-approve -target=azurerm_key_vault_secret.db_database
+          terraform apply -auto-approve -target=azurerm_role_assignment.backend_kv_secrets
+          terraform apply -auto-approve -target=azurerm_private_endpoint.pe_keyvault
+          terraform apply -auto-approve -target=azurerm_private_dns_zone.kv_dns
+          terraform apply -auto-approve -target=azurerm_private_dns_zone_virtual_network_link.kv_dns_link
+          terraform apply -auto-approve -target=azurerm_private_dns_a_record.kv_a_record
         env:
           TF_VAR_subscription_id:         ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           TF_VAR_tenant_id:               ${{ secrets.AZURE_TENANT_ID }}
