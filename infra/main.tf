@@ -121,9 +121,6 @@ resource "azurerm_linux_web_app" "backend" {
     DB_PASSWORD   = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/db-password/)"
   }
 
-  depends_on = [
-    azurerm_key_vault.keyvault
-  ]
 }
 # ======================
 # VNet Integration
