@@ -6,6 +6,7 @@ data "azurerm_client_config" "current" {}
 data "azurerm_resource_group" "rg" {
   name = var.resource_group_name
 }
+
 # ============================================================
 # 2. Key Vault (RBAC activado + admin OIDC)
 # ============================================================
@@ -22,26 +23,21 @@ resource "azurerm_key_vault" "keyvault" {
 
   sku_name = "standard"
 }
+
 # ============================================================
 # 3. Rol: Key Vault Administrator para GitHub (OIDC)
 # ============================================================
 
-resource "azurerm_key_vault" "keyvault" {
-  name                        = var.key_vault_name
-  location                    = data.azurerm_resource_group.rg.location
-  resource_group_name         = data.azurerm_resource_group.rg.name
-  enabled_for_disk_encryption = true
-  tenant_id                   = var.tenant_id
-  soft_delete_retention_days  = 7
-  purge_protection_enabled    = false
-  enable_rbac_authorization   = true
-
-  sku_name = "standard"
+resource "azurerm_role_assignment" "keyvault_admin" {
+  scope                = azurerm_key_vault.keyvault.id
+  role_definition_name = "Key Vault Administrator"
+  principal_id         = data.azurerm_client_config.current.object_id
 }
 
 # ============================================================
 # 4. Llave RSA para CI/CD (opcional pero recomendado)
 # ============================================================
+
 resource "azurerm_key_vault_key" "ci_cd_key" {
   name         = "ci-cd-rsa-key"
   key_vault_id = azurerm_key_vault.keyvault.id
@@ -59,9 +55,11 @@ resource "azurerm_key_vault_key" "ci_cd_key" {
     notify_before_expiry = "P31D"
   }
 }
+
 # ============================================================
 # 5. Secretos SQL (username, password, database)
 # ============================================================
+
 resource "azurerm_key_vault_secret" "db_username" {
   name         = "db-username"
   value        = var.sql_admin_login
@@ -109,8 +107,9 @@ resource "azurerm_private_endpoint" "pe_keyvault" {
 }
 
 # ============================================================
-# 8.Private DNS Zone para Key Vault
+# 8. Private DNS Zone para Key Vault
 # ============================================================
+
 resource "azurerm_private_dns_zone" "kv_dns" {
   name                = "privatelink.vaultcore.azure.net"
   resource_group_name = data.azurerm_resource_group.rg.name
