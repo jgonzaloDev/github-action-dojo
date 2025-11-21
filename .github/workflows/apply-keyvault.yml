@@ -28,6 +28,11 @@ jobs:
       - name: Terraform Init
         working-directory: infra
         run: terraform init
+        
+        # 🔥 FIX – limpiar el estado antes de crear el Key Vault
+      - name: Reset state for Key Vault
+        working-directory: infra
+        run: terraform state rm azurerm_key_vault.keyvault || true
 
       #############################
       #   🔥 FASE 1: KV + ADMIN   #
