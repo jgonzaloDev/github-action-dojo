@@ -46,6 +46,7 @@ jobs:
         env:
           TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           TF_VAR_tenant_id:       ${{ secrets.AZURE_TENANT_ID }}
+          TF_VAR_azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}   # <-- ESTA ES LA QUE FALTABA
 
           TF_VAR_key_vault_name:        ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
           TF_VAR_resource_group_name:   ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
