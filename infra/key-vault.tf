@@ -3,10 +3,8 @@
 # ======================
 
 data "azurerm_subscription" "primary" {}
-
 data "azurerm_client_config" "current" {}
 
-# Usa el resource group del módulo principal (main.tf)
 data "azurerm_resource_group" "rg" {
   name = var.resource_group_name
 }
@@ -21,8 +19,8 @@ resource "azurerm_key_vault" "keyvault" {
   resource_group_name         = data.azurerm_resource_group.rg.name
   tenant_id                   = var.tenant_id
 
-  enabled_for_disk_encryption = false
-  soft_delete_retention_days  = 90
+  enabled_for_disk_encryption = true
+  soft_delete_retention_days  = 7
   purge_protection_enabled    = false
   enable_rbac_authorization   = true
 
@@ -83,12 +81,9 @@ resource "azurerm_key_vault_secret" "db_database" {
   key_vault_id = azurerm_key_vault.keyvault.id
 }
 
-# ======================
-# 5. ROLE PARA BACKEND (MANAGED IDENTITY)
-# ======================
-
-resource "azurerm_role_assignment" "backend_kv_secrets" {
-  scope                = azurerm_key_vault.keyvault.id
-  role_definition_name = "Key Vault Secrets User"
-  principal_id         = azurerm_linux_web_app.backend.identity[0].principal_id
-}
+# 🚫 ELIMINADO: este recurso NO DEBE ir en este workflow
+# resource "azurerm_role_assignment" "backend_kv_secrets" {
+#   scope                = azurerm_key_vault.keyvault.id
+#   role_definition_name = "Key Vault Secrets User"
+#   principal_id         = azurerm_linux_web_app.backend.identity[0].principal_id
+# }
