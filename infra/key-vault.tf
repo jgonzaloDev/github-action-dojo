@@ -2,6 +2,7 @@
 # DATA SOURCE NECESARIO PARA RBAC
 # ============================================================
 data "azurerm_client_config" "current" {}
+
 # ============================================================
 # KEY VAULT
 # ============================================================
@@ -121,7 +122,8 @@ resource "azurerm_private_dns_zone_virtual_network_link" "kv_dns_link" {
 }
 
 resource "azurerm_private_dns_a_record" "kv_a_record" {
-  name                = azurerm_key_vault.keyvault.name
+  # 🔥 CORREGIDO: DEBE SER LOWERCASE 🔥
+  name                = lower(azurerm_key_vault.keyvault.name)
   zone_name           = azurerm_private_dns_zone.kv_dns.name
   resource_group_name = azurerm_resource_group.rg.name
   ttl                 = 300
