@@ -28,11 +28,6 @@ jobs:
       - name: Terraform Init
         working-directory: infra
         run: terraform init
-        
-        # 🔥 FIX – limpiar el estado antes de crear el Key Vault
-      - name: Reset state for Key Vault
-        working-directory: infra
-        run: terraform state rm azurerm_key_vault.keyvault || true
 
       #############################
       #   🔥 FASE 1: KV + ADMIN   #
@@ -40,7 +35,6 @@ jobs:
       - name: Terraform Apply – fase 1 (KV + Admin)
         working-directory: infra
         run: |
-          terraform apply -auto-approve -target=azurerm_key_vault.keyvault
           terraform apply -auto-approve -target=azurerm_role_assignment.keyvault_admin
         env:
           TF_VAR_subscription_id:         ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -58,7 +52,7 @@ jobs:
           TF_VAR_app_service_name:        ${{ secrets.TF_VAR_APP_SERVICE_NAME }}
           TF_VAR_app_service_name_web:    ${{ secrets.TF_VAR_APP_SERVICE_NAME_WEB }}
           TF_VAR_key_vault_name:          ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
-          TF_VAR_storage_account_name:    ${{ secrets.TF_VAR_STorAGE_ACCOUNT_NAME }}
+          TF_VAR_storage_account_name:    ${{ secrets.TF_VAR_STORAGE_ACCOUNT_NAME }}
           TF_VAR_cert_data:               ${{ secrets.TF_VAR_cert_data }}
           TF_VAR_cert_password:           ${{ secrets.TF_VAR_CERT_PASSWORD }}
           TF_VAR_azure_client_id:         ${{ secrets.AZURE_CLIENT_ID }}
