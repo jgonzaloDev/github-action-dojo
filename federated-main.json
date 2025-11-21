@@ -1,7 +1,0 @@
-﻿{
-  "name": "github-actions-main",
-  "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:jgonzaloDev/github-action-dojo:ref:refs/heads/main",
-  "description": "OIDC federated credential for GitHub Actions main branch",
-  "audiences": ["api://AzureADTokenExchange"]
-}
