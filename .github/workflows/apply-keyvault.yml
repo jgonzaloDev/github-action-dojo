@@ -29,16 +29,16 @@ jobs:
         working-directory: infra
         run: terraform init
 
-      - name: Terraform Apply ONLY KEY VAULT
+      - name: Terraform Apply – KEY VAULT ONLY
         working-directory: infra
-        run: terraform apply -auto-approve \
-             -target=azurerm_key_vault.keyvault \
-             -target=azurerm_role_assignment.keyvault_admin \
-             -target=azurerm_key_vault_key.ci_cd_key
+        run: terraform apply -auto-approve
         env:
           TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          TF_VAR_tenant_id:       ${{ secrets.AZURE_TENANT_ID }}
 
-          TF_VAR_key_vault_name: ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
-          TF_VAR_resource_group_name: ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
-          TF_VAR_location: ${{ secrets.TF_VAR_LOCATION }}
+          TF_VAR_key_vault_name:        ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
+          TF_VAR_resource_group_name:   ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
+          TF_VAR_location:              ${{ secrets.TF_VAR_LOCATION }}
+          TF_VAR_sql_admin_login:       ${{ secrets.TF_VAR_SQL_ADMIN_LOGIN }}
+          TF_VAR_sql_admin_password:    ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
+          TF_VAR_database_name:         ${{ secrets.TF_VAR_DATABASE_NAME }}
