@@ -31,7 +31,18 @@ jobs:
 
       - name: Terraform Apply - KEY VAULT ONLY
         working-directory: infra
-        run: terraform apply -auto-approve -target=azurerm_key_vault.keyvault -target=azurerm_role_assignment.keyvault_admin -target=azurerm_key_vault_key.ci_cd_key -target=azurerm_key_vault_secret.db_username -target=azurerm_key_vault_secret.db_password -target=azurerm_key_vault_secret.db_database -target=azurerm_private_endpoint.pe_keyvault -target=azurerm_private_dns_zone.kv_dns -target=azurerm_private_dns_zone_virtual_network_link.kv_dns_link -target=azurerm_private_dns_a_record.kv_a_record
+        run: |
+          terraform apply -auto-approve \
+            -target=azurerm_key_vault.keyvault \
+            -target=azurerm_role_assignment.keyvault_admin \
+            -target=azurerm_key_vault_key.ci_cd_key \
+            -target=azurerm_key_vault_secret.db_username \
+            -target=azurerm_key_vault_secret.db_password \
+            -target=azurerm_key_vault_secret.db_database \
+            -target=azurerm_private_endpoint.pe_keyvault \
+            -target=azurerm_private_dns_zone.kv_dns \
+            -target=azurerm_private_dns_zone_virtual_network_link.kv_dns_link \
+            -target=azurerm_private_dns_a_record.kv_a_record
         env:
           TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           TF_VAR_tenant_id:       ${{ secrets.AZURE_TENANT_ID }}
@@ -45,3 +56,15 @@ jobs:
           TF_VAR_database_name:         ${{ secrets.TF_VAR_DATABASE_NAME }}
 
           TF_VAR_vnet_name:             ${{ secrets.TF_VAR_VNET_NAME }}
+          TF_VAR_subnets:               ${{ secrets.TF_VAR_SUBNETS }}
+
+          TF_VAR_app_service_name:      ${{ secrets.TF_VAR_APP_SERVICE_NAME }}
+          TF_VAR_app_service_plan_name: ${{ secrets.TF_VAR_APP_SERVICE_PLAN_NAME }}
+
+          TF_VAR_app_service_name_web:      ${{ secrets.TF_VAR_APP_SERVICE_NAME_WEB }}
+          TF_VAR_app_service_plan_name_web: ${{ secrets.TF_VAR_APP_SERVICE_PLAN_NAME_WEB }}
+
+          TF_VAR_storage_account_name:  ${{ secrets.TF_VAR_STORAGE_ACCOUNT_NAME }}
+
+          TF_VAR_cert_data:        ${{ secrets.TF_VAR_CERT_DATA }}
+          TF_VAR_cert_password:    ${{ secrets.TF_VAR_CERT_PASSWORD }}
