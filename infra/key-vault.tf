@@ -1,38 +1,27 @@
-terraform {
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 4.34.0"
-    }
-  }
-}
-
-provider "azurerm" {
-  features {}
-  subscription_id = var.subscription_id
-  tenant_id       = var.tenant_id
-}
-
 # ======================
-# Data Sources
+# DATA SOURCES NECESARIOS
 # ======================
-
 
 data "azurerm_subscription" "primary" {}
 
-# 🔥 NECESARIO para obtener el principal_id de GitHub OIDC
 data "azurerm_client_config" "current" {}
 
-# ============================================================
-# 2. Key Vault (RBAC activado + admin OIDC)
-# ============================================================
+# Usa el resource group del módulo principal (main.tf)
+data "azurerm_resource_group" "rg" {
+  name = var.resource_group_name
+}
+
+# ======================
+# 1. KEY VAULT
+# ======================
 
 resource "azurerm_key_vault" "keyvault" {
   name                        = var.key_vault_name
   location                    = data.azurerm_resource_group.rg.location
   resource_group_name         = data.azurerm_resource_group.rg.name
-  enabled_for_disk_encryption = true
   tenant_id                   = var.tenant_id
+
+  enabled_for_disk_encryption = true
   soft_delete_retention_days  = 7
   purge_protection_enabled    = false
   enable_rbac_authorization   = true
@@ -40,9 +29,9 @@ resource "azurerm_key_vault" "keyvault" {
   sku_name = "standard"
 }
 
-# ============================================================
-# 3. Rol: Key Vault Administrator para GitHub (OIDC)
-# ============================================================
+# ======================
+# 2. ROLE ADMIN (GITHUB OIDC)
+# ======================
 
 resource "azurerm_role_assignment" "keyvault_admin" {
   scope                = azurerm_key_vault.keyvault.id
@@ -50,9 +39,9 @@ resource "azurerm_role_assignment" "keyvault_admin" {
   principal_id         = data.azurerm_client_config.current.object_id
 }
 
-# ============================================================
-# 4. Llave RSA
-# ============================================================
+# ======================
+# 3. RSA KEY
+# ======================
 
 resource "azurerm_key_vault_key" "ci_cd_key" {
   name         = "ci-cd-rsa-key"
@@ -72,9 +61,9 @@ resource "azurerm_key_vault_key" "ci_cd_key" {
   }
 }
 
-# ============================================================
-# 5. Secretos SQL
-# ============================================================
+# ======================
+# 4. SQL SECRETS
+# ======================
 
 resource "azurerm_key_vault_secret" "db_username" {
   name         = "db-username"
@@ -94,14 +83,12 @@ resource "azurerm_key_vault_secret" "db_database" {
   key_vault_id = azurerm_key_vault.keyvault.id
 }
 
-# ============================================================
-# 6. Rol para el Backend (Managed Identity)
-# ============================================================
+# ======================
+# 5. ROLE PARA BACKEND (MANAGED IDENTITY)
+# ======================
 
 resource "azurerm_role_assignment" "backend_kv_secrets" {
   scope                = azurerm_key_vault.keyvault.id
   role_definition_name = "Key Vault Secrets User"
   principal_id         = azurerm_linux_web_app.backend.identity[0].principal_id
 }
-
-# ========================================================
