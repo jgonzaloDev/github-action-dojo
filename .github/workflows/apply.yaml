@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      id-token: write      # Requerido para OIDC
-      contents: read       # Necesario para checkout
+      id-token: write
+      contents: read
 
     steps:
       # =======================================================
@@ -47,11 +47,11 @@ jobs:
         run: terraform init
 
       # =======================================================
-      # 5️⃣ TERRAFORM APPLY – SOLO MÓDULO MAIN
+      # 5️⃣ TERRAFORM APPLY – APLICAR TODO
       # =======================================================
-      - name: Terraform Apply – MAIN only
+      - name: Terraform Apply – MAIN
         working-directory: infra
-        run: terraform apply -auto-approve -target=module.main
+        run: terraform apply -auto-approve
         env:
           # 🌎 Azure OIDC
           TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
