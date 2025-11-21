@@ -1,11 +1,27 @@
-# ============================================================
-# 1. Data Sources necesarios
-# ============================================================
-data "azurerm_client_config" "current" {}
-
-data "azurerm_resource_group" "rg" {
-  name = var.resource_group_name
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 4.34.0"
+    }
+  }
 }
+
+provider "azurerm" {
+  features {}
+  subscription_id = var.subscription_id
+  tenant_id       = var.tenant_id
+}
+
+# ======================
+# Data Sources
+# ======================
+
+
+data "azurerm_subscription" "primary" {}
+
+# 🔥 NECESARIO para obtener el principal_id de GitHub OIDC
+data "azurerm_client_config" "current" {}
 
 # ============================================================
 # 2. Key Vault (RBAC activado + admin OIDC)
@@ -35,7 +51,7 @@ resource "azurerm_role_assignment" "keyvault_admin" {
 }
 
 # ============================================================
-# 4. Llave RSA para CI/CD (opcional pero recomendado)
+# 4. Llave RSA
 # ============================================================
 
 resource "azurerm_key_vault_key" "ci_cd_key" {
@@ -57,7 +73,7 @@ resource "azurerm_key_vault_key" "ci_cd_key" {
 }
 
 # ============================================================
-# 5. Secretos SQL (username, password, database)
+# 5. Secretos SQL
 # ============================================================
 
 resource "azurerm_key_vault_secret" "db_username" {
@@ -88,46 +104,4 @@ resource "azurerm_role_assignment" "backend_kv_secrets" {
   principal_id         = azurerm_linux_web_app.backend.identity[0].principal_id
 }
 
-# ============================================================
-# 7. Private Endpoint del Key Vault
-# ============================================================
-
-resource "azurerm_private_endpoint" "pe_keyvault" {
-  name                = "pe-keyvault"
-  location            = data.azurerm_resource_group.rg.location
-  resource_group_name = data.azurerm_resource_group.rg.name
-  subnet_id           = azurerm_subnet.subnet_pe.id
-
-  private_service_connection {
-    name                           = "keyvault-connection"
-    private_connection_resource_id = azurerm_key_vault.keyvault.id
-    subresource_names              = ["vault"]
-    is_manual_connection           = false
-  }
-}
-
-# ============================================================
-# 8. Private DNS Zone para Key Vault
-# ============================================================
-
-resource "azurerm_private_dns_zone" "kv_dns" {
-  name                = "privatelink.vaultcore.azure.net"
-  resource_group_name = data.azurerm_resource_group.rg.name
-}
-
-resource "azurerm_private_dns_zone_virtual_network_link" "kv_dns_link" {
-  name                  = "kv-dns-vnet-link"
-  resource_group_name   = data.azurerm_resource_group.rg.name
-  private_dns_zone_name = azurerm_private_dns_zone.kv_dns.name
-  virtual_network_id    = azurerm_virtual_network.vnet.id
-}
-
-resource "azurerm_private_dns_a_record" "kv_a_record" {
-  name                = lower(azurerm_key_vault.keyvault.name)
-  zone_name           = azurerm_private_dns_zone.kv_dns.name
-  resource_group_name = data.azurerm_resource_group.rg.name
-  ttl                 = 300
-  records             = [
-    azurerm_private_endpoint.pe_keyvault.private_service_connection[0].private_ip_address
-  ]
-}
+# ========================================================
