@@ -1,7 +1,7 @@
 ﻿{
   "name": "github-actions-prueba",
   "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:jgonzaloDev/github-action-dojo/.github/workflows/apply.yaml@refs/heads/prueba",
+  "subject": "repo:jgonzaloDev/github-action-dojo:.github/workflows/apply.yaml@refs/heads/prueba",
   "description": "OIDC federated credential for GitHub Actions prueba branch",
   "audiences": ["api://AzureADTokenExchange"]
 }
