@@ -28,14 +28,14 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # 4️⃣ Terraform Init (mismo infra/)
-      - name: Terraform Init
-        working-directory: infra
+      # 4️⃣ Terraform Init en carpeta infra/keyvault
+      - name: Terraform Init (Key Vault)
+        working-directory: infra/keyvault
         run: terraform init
 
-      # 5️⃣ Terraform Apply – SOLO LÓGICA DE KEY VAULT (roles + secretos)
+      # 5️⃣ Terraform Apply – SOLO KEY VAULT (roles + secretos)
       - name: Terraform Apply KEY VAULT
-        working-directory: infra
+        working-directory: infra/keyvault
         run: terraform apply -auto-approve
         env:
           # 🔵 Azure básicos
@@ -53,7 +53,7 @@ jobs:
           # 🤝 GitHub OIDC Service Principal (Secrets Officer)
           TF_VAR_github_principal_id:     ${{ secrets.TF_VAR_GITHUB_PRINCIPAL_ID }}
 
-          # Datos que usas para secretos de BD
-          TF_VAR_sql_database_name:       ${{ secrets.TF_VAR_DATABASE_NAME }}
+          # 🔢 Datos de BD usados para los secretos
+          TF_VAR_database_name:           ${{ secrets.TF_VAR_DATABASE_NAME }}
           TF_VAR_sql_admin_login:         ${{ secrets.TF_VAR_SQL_ADMIN_LOGIN }}
           TF_VAR_sql_admin_password:      ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
