@@ -1,15 +1,10 @@
-name: Terraform Apply – MAIN Infrastructure
+name: Terraform Apply – MAIN Infra
 
 on:
   workflow_dispatch:
-    inputs:
-      apply:
-        description: "Aplicar cambios en la infraestructura MAIN"
-        required: true
-        default: "yes"
 
 jobs:
-  deploy-main:
+  apply-main:
     runs-on: ubuntu-latest
 
     permissions:
@@ -17,15 +12,11 @@ jobs:
       contents: read
 
     steps:
-      # =======================================================
-      # 1️⃣ CHECKOUT DEL REPOSITORIO
-      # =======================================================
+      # 1️⃣ Checkout del repo
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # =======================================================
-      # 2️⃣ LOGIN EN AZURE VIA OIDC
-      # =======================================================
+      # 2️⃣ Login en Azure usando OIDC
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
@@ -33,57 +24,51 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # =======================================================
-      # 3️⃣ INSTALAR TERRAFORM
-      # =======================================================
+      # 3️⃣ Instalar Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # =======================================================
-      # 4️⃣ TERRAFORM INIT (solo en carpeta infra/)
-      # =======================================================
+      # 4️⃣ Terraform Init (carpeta infra)
       - name: Terraform Init
         working-directory: infra
         run: terraform init
 
-      # =======================================================
-      # 5️⃣ TERRAFORM APPLY – APLICAR TODO
-      # =======================================================
-      - name: Terraform Apply – MAIN
+      # 5️⃣ Terraform Apply – LEVANTA TODO LO DEL main.tf
+      - name: Terraform Apply MAIN
         working-directory: infra
         run: terraform apply -auto-approve
         env:
-          # 🌎 Azure OIDC
-          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          TF_VAR_tenant_id:       ${{ secrets.AZURE_TENANT_ID }}
+          # 🔵 Azure principales
+          TF_VAR_subscription_id:         ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_tenant_id:               ${{ secrets.AZURE_TENANT_ID }}
+          TF_VAR_location:                ${{ secrets.TF_VAR_LOCATION }}
+          TF_VAR_resource_group_name:     ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
 
-          # 🌐 Networking
-          TF_VAR_resource_group_name: ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
-          TF_VAR_location:            ${{ secrets.TF_VAR_LOCATION }}
-          TF_VAR_vnet_name:           ${{ secrets.TF_VAR_VNET_NAME }}
-          TF_VAR_subnets:             ${{ secrets.TF_VAR_SUBNETS }}
+          # 🌐 Red
+          TF_VAR_vnet_name:               ${{ secrets.TF_VAR_VNET_NAME }}
+          TF_VAR_subnets:                 ${{ secrets.TF_VAR_SUBNETS }}
 
-          # 🗄 SQL Server
-          TF_VAR_sql_server_name:     ${{ secrets.TF_VAR_SQL_SERVER_NAME }}
-          TF_VAR_database_name:       ${{ secrets.TF_VAR_DATABASE_NAME }}
-          TF_VAR_sql_admin_login:     ${{ secrets.TF_VAR_SQL_ADMIN_LOGIN }}
-          TF_VAR_sql_admin_password:  ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
+          # 🐘 SQL Server
+          TF_VAR_sql_server_name:         ${{ secrets.TF_VAR_SQL_SERVER_NAME }}
+          TF_VAR_database_name:           ${{ secrets.TF_VAR_DATABASE_NAME }}
+          TF_VAR_sql_admin_login:         ${{ secrets.TF_VAR_SQL_ADMIN_LOGIN }}
+          TF_VAR_sql_admin_password:      ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
 
-          # 🖥 App Services
-          TF_VAR_app_service_plan_name:     ${{ secrets.TF_VAR_APP_SERVICE_PLAN_NAME }}
-          TF_VAR_app_service_plan_name_web: ${{ secrets.TF_VAR_APP_SERVICE_PLAN_NAME_WEB }}
-          TF_VAR_app_service_name:          ${{ secrets.TF_VAR_APP_SERVICE_NAME }}
-          TF_VAR_app_service_name_web:      ${{ secrets.TF_VAR_APP_SERVICE_NAME_WEB }}
+          # 🕸 App Services (backend y frontend)
+          TF_VAR_app_service_plan_name:       ${{ secrets.TF_VAR_APP_SERVICE_PLAN_NAME }}
+          TF_VAR_app_service_plan_name_web:   ${{ secrets.TF_VAR_APP_SERVICE_PLAN_NAME_WEB }}
+          TF_VAR_app_service_name:            ${{ secrets.TF_VAR_APP_SERVICE_NAME }}
+          TF_VAR_app_service_name_web:        ${{ secrets.TF_VAR_APP_SERVICE_NAME_WEB }}
 
-          # 🔐 Key Vault
-          TF_VAR_key_vault_name: ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
+          # 🔐 Key Vault (solo el recurso, sin roles aún)
+          TF_VAR_key_vault_name:              ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
 
           # 📦 Storage
-          TF_VAR_storage_account_name: ${{ secrets.TF_VAR_STORAGE_ACCOUNT_NAME }}
+          TF_VAR_storage_account_name:        ${{ secrets.TF_VAR_STORAGE_ACCOUNT_NAME }}
 
-          # 📜 Certificados (PFX para Application Gateway)
-          TF_VAR_cert_data:     ${{ secrets.TF_VAR_CERT_DATA }}
-          TF_VAR_cert_password: ${{ secrets.TF_VAR_CERT_PASSWORD }}
+          # 📜 Cert (lo tienes en variables aunque aún no lo uses en main)
+          TF_VAR_cert_data:                   ${{ secrets.TF_VAR_CERT_DATA }}
+          TF_VAR_cert_password:               ${{ secrets.TF_VAR_CERT_PASSWORD }}
 
-          # 🔑 OIDC Client (Terraform)
-          TF_VAR_azure_client_id: ${{ secrets.AZURE_CLIENT_ID }}
+          # (Opcional, por si en el futuro usas esta variable)
+          TF_VAR_azure_client_id:             ${{ secrets.AZURE_CLIENT_ID }}

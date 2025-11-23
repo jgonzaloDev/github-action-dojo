@@ -1,10 +1,10 @@
-name: Key Vault Deploy
+name: Terraform Apply – KEY VAULT
 
 on:
   workflow_dispatch:
 
 jobs:
-  terraform:
+  apply-keyvault:
     runs-on: ubuntu-latest
 
     permissions:
@@ -12,9 +12,11 @@ jobs:
       contents: read
 
     steps:
+      # 1️⃣ Checkout del repo
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      # 2️⃣ Login en Azure usando OIDC
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
@@ -22,83 +24,36 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      # 3️⃣ Instalar Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
+      # 4️⃣ Terraform Init (mismo infra/)
       - name: Terraform Init
         working-directory: infra
         run: terraform init
 
-      #############################
-      #   🔥 FASE 1: KV + ADMIN   #
-      #############################
-      - name: Terraform Apply – fase 1 (KV + Admin)
+      # 5️⃣ Terraform Apply – SOLO LÓGICA DE KEY VAULT (roles + secretos)
+      - name: Terraform Apply KEY VAULT
         working-directory: infra
-        run: |
-          terraform apply -auto-approve -target=azurerm_role_assignment.keyvault_admin
+        run: terraform apply -auto-approve
         env:
+          # 🔵 Azure básicos
           TF_VAR_subscription_id:         ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           TF_VAR_tenant_id:               ${{ secrets.AZURE_TENANT_ID }}
-          TF_VAR_resource_group_name:     ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
           TF_VAR_location:                ${{ secrets.TF_VAR_LOCATION }}
-          TF_VAR_vnet_name:               ${{ secrets.TF_VAR_VNET_NAME }}
-          TF_VAR_subnets:                 ${{ secrets.TF_VAR_SUBNETS }}
-          TF_VAR_sql_server_name:         ${{ secrets.TF_VAR_SQL_SERVER_NAME }}
-          TF_VAR_database_name:           ${{ secrets.TF_VAR_DATABASE_NAME }}
+          TF_VAR_resource_group_name:     ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
+
+          # 🔐 Key Vault
+          TF_VAR_key_vault_name:          ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
+
+          # 🧑‍💼 Tu usuario como Key Vault Admin
+          TF_VAR_admin_user_object_id:    ${{ secrets.TF_VAR_ADMIN_USER_OBJECT_ID }}
+
+          # 🤝 GitHub OIDC Service Principal (Secrets Officer)
+          TF_VAR_github_principal_id:     ${{ secrets.TF_VAR_GITHUB_PRINCIPAL_ID }}
+
+          # Datos que usas para secretos de BD
+          TF_VAR_sql_database_name:       ${{ secrets.TF_VAR_DATABASE_NAME }}
           TF_VAR_sql_admin_login:         ${{ secrets.TF_VAR_SQL_ADMIN_LOGIN }}
           TF_VAR_sql_admin_password:      ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
-          TF_VAR_app_service_plan_name:   ${{ secrets.TF_VAR_APP_SERVICE_PLAN_NAME }}
-          TF_VAR_app_service_plan_name_web: ${{ secrets.TF_VAR_APP_SERVICE_PLAN_NAME_WEB }}
-          TF_VAR_app_service_name:        ${{ secrets.TF_VAR_APP_SERVICE_NAME }}
-          TF_VAR_app_service_name_web:    ${{ secrets.TF_VAR_APP_SERVICE_NAME_WEB }}
-          TF_VAR_key_vault_name:          ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
-          TF_VAR_storage_account_name:    ${{ secrets.TF_VAR_STORAGE_ACCOUNT_NAME }}
-          TF_VAR_cert_data:               ${{ secrets.TF_VAR_cert_data }}
-          TF_VAR_cert_password:           ${{ secrets.TF_VAR_CERT_PASSWORD }}
-          TF_VAR_azure_client_id:         ${{ secrets.AZURE_CLIENT_ID }}
-          TF_VAR_github_principal_id: ${{ secrets.GITHUB_PRINCIPAL_ID }}
-          TF_VAR_admin_user_object_id: ${{ secrets.ADMIN_USER_OBJECT_ID }}
-
-      #############################
-      # ⏳ ESPERA 3 MIN (RBAC)    #
-      #############################
-      - name: Esperar propagación (3 minutos)
-        run: sleep 180
-
-      ###############################################
-      # 🔥 FASE 2: SECRETS + PE + DNS + RSA KEY      #
-      ###############################################
-      - name: Terraform Apply – fase 2
-        working-directory: infra
-        run: |
-          terraform apply -auto-approve -target=azurerm_key_vault_key.ci_cd_key
-          terraform apply -auto-approve -target=azurerm_key_vault_secret.db_username
-          terraform apply -auto-approve -target=azurerm_key_vault_secret.db_password
-          terraform apply -auto-approve -target=azurerm_key_vault_secret.db_database
-          terraform apply -auto-approve -target=azurerm_role_assignment.backend_kv_secrets
-          terraform apply -auto-approve -target=azurerm_private_endpoint.pe_keyvault
-          terraform apply -auto-approve -target=azurerm_private_dns_zone.kv_dns
-          terraform apply -auto-approve -target=azurerm_private_dns_zone_virtual_network_link.kv_dns_link
-          terraform apply -auto-approve -target=azurerm_private_dns_a_record.kv_a_record
-        env:
-          TF_VAR_subscription_id:         ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          TF_VAR_tenant_id:               ${{ secrets.AZURE_TENANT_ID }}
-          TF_VAR_resource_group_name:     ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
-          TF_VAR_location:                ${{ secrets.TF_VAR_LOCATION }}
-          TF_VAR_vnet_name:               ${{ secrets.TF_VAR_VNET_NAME }}
-          TF_VAR_subnets:                 ${{ secrets.TF_VAR_SUBNETS }}
-          TF_VAR_sql_server_name:         ${{ secrets.TF_VAR_SQL_SERVER_NAME }}
-          TF_VAR_database_name:           ${{ secrets.TF_VAR_DATABASE_NAME }}
-          TF_VAR_sql_admin_login:         ${{ secrets.TF_VAR_SQL_ADMIN_LOGIN }}
-          TF_VAR_sql_admin_password:      ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
-          TF_VAR_app_service_plan_name:   ${{ secrets.TF_VAR_APP_SERVICE_PLAN_NAME }}
-          TF_VAR_app_service_plan_name_web: ${{ secrets.TF_VAR_APP_SERVICE_PLAN_NAME_WEB }}
-          TF_VAR_app_service_name:        ${{ secrets.TF_VAR_APP_SERVICE_NAME }}
-          TF_VAR_app_service_name_web:    ${{ secrets.TF_VAR_APP_SERVICE_NAME_WEB }}
-          TF_VAR_key_vault_name:          ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
-          TF_VAR_storage_account_name:    ${{ secrets.TF_VAR_STORAGE_ACCOUNT_NAME }}
-          TF_VAR_cert_data:               ${{ secrets.TF_VAR_cert_data }}
-          TF_VAR_cert_password:           ${{ secrets.TF_VAR_CERT_PASSWORD }}
-          TF_VAR_azure_client_id:         ${{ secrets.AZURE_CLIENT_ID }}
-          TF_VAR_github_principal_id: ${{ secrets.GITHUB_PRINCIPAL_ID }}
-          TF_VAR_admin_user_object_id: ${{ secrets.ADMIN_USER_OBJECT_ID }}
