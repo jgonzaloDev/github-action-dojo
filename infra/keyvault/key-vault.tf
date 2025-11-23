@@ -42,7 +42,7 @@ data "azurerm_client_config" "current" {}
 ###############################################################
 
 resource "azurerm_role_assignment" "github_kv_secrets" {
-  scope                = data.azurerm_key_vault.kv.id
+  scope                = azurerm_key_vault.kv.id
   role_definition_name = "Key Vault Secrets Officer"
   principal_id         = var.github_principal_id
 }
@@ -52,7 +52,7 @@ resource "azurerm_role_assignment" "github_kv_secrets" {
 ###############################################################
 
 resource "azurerm_role_assignment" "user_kv_admin" {
-  scope                = data.azurerm_key_vault.kv.id
+  scope                = azurerm_key_vault.kv.id
   role_definition_name = "Key Vault Administrator"
   principal_id         = var.admin_user_object_id
 }
@@ -75,29 +75,42 @@ resource "time_sleep" "wait_for_iam" {
 
 resource "azurerm_key_vault_secret" "bd_datos" {
   name         = "db-database"
-  value        = var.database_name
-  key_vault_id = data.azurerm_key_vault.kv.id
-  depends_on   = [time_sleep.wait_for_iam]
+  value        = var.sql_database_name
+  key_vault_id = azurerm_key_vault.kv.id
 
-  lifecycle { ignore_changes = [value] }
+  lifecycle {
+    ignore_changes = [
+      value
+    ]
+  }
+
+  depends_on = [time_sleep.wait_for_iam]
 }
 
 resource "azurerm_key_vault_secret" "userbd" {
   name         = "db-username"
   value        = var.sql_admin_login
-  key_vault_id = data.azurerm_key_vault.kv.id
-  depends_on   = [time_sleep.wait_for_iam]
+  key_vault_id = azurerm_key_vault.kv.id
 
-  lifecycle { ignore_changes = [value] }
+  lifecycle { 
+    ignore_changes = [
+      value
+      ]
+  }
+  depends_on = [time_sleep.wait_for_iam]
 }
 
 resource "azurerm_key_vault_secret" "passwordbd" {
   name         = "db-password"
   value        = var.sql_admin_password
-  key_vault_id = data.azurerm_key_vault.kv.id
-  depends_on   = [time_sleep.wait_for_iam]
+  key_vault_id = azurerm_key_vault.kv.id
 
-  lifecycle { ignore_changes = [value] }
+  lifecycle {
+    ignore_changes = [
+      value
+    ]
+  }
+  depends_on = [time_sleep.wait_for_iam]
 }
 
 ###############################################################
@@ -106,15 +119,15 @@ resource "azurerm_key_vault_secret" "passwordbd" {
 
 data "azurerm_key_vault_secret" "bd_datos_read" {
   name         = azurerm_key_vault_secret.bd_datos.name
-  key_vault_id = data.azurerm_key_vault.kv.id
+  key_vault_id = azurerm_key_vault.kv.id
 }
 
 data "azurerm_key_vault_secret" "userbd_read" {
   name         = azurerm_key_vault_secret.userbd.name
-  key_vault_id = data.azurerm_key_vault.kv.id
+  key_vault_id = azurerm_key_vault.kv.id
 }
 
 data "azurerm_key_vault_secret" "passwordbd_read" {
   name         = azurerm_key_vault_secret.passwordbd.name
-  key_vault_id = data.azurerm_key_vault.kv.id
+  key_vault_id = azurerm_key_vault.kv.id
 }
