@@ -5,82 +5,96 @@
 data "azurerm_subscription" "primary" {}
 data "azurerm_client_config" "current" {}
 
-data "azurerm_resource_group" "rg" {
-  name = var.resource_group_name
+###############################################################
+# 3️⃣ GitHub OIDC → Key Vault Secrets Officer
+###############################################################
+resource "azurerm_role_assignment" "github_kv_secrets" {
+  scope                = azurerm_key_vault.kv.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = var.github_principal_id
 }
 
-# ======================
-# 1. KEY VAULT
-# ======================
-
-resource "azurerm_key_vault" "keyvault" {
-  name                        = var.key_vault_name
-  location                    = data.azurerm_resource_group.rg.location
-  resource_group_name         = data.azurerm_resource_group.rg.name
-  tenant_id                   = var.tenant_id
-  purge_protection_enabled    = false
-  enable_rbac_authorization   = true
-
-  sku_name = "standard"
-}
-
-# ======================
-# 2. ROLE ADMIN (GITHUB OIDC)
-# ======================
-
-resource "azurerm_role_assignment" "keyvault_admin" {
-  scope                = azurerm_key_vault.keyvault.id
+###############################################################
+# 4️⃣ Tu Usuario → Key Vault Administrator
+###############################################################
+resource "azurerm_role_assignment" "user_kv_admin" {
+  scope                = azurerm_key_vault.kv.id
   role_definition_name = "Key Vault Administrator"
-  principal_id         = data.azurerm_client_config.current.object_id
+  principal_id         = var.admin_user_object_id
 }
 
-# ======================
-# 3. RSA KEY
-# ======================
+###############################################################
+# 5️⃣ Espera propagación IAM
+###############################################################
+resource "time_sleep" "wait_for_iam" {
+  depends_on = [
+    azurerm_role_assignment.github_kv_secrets,
+    azurerm_role_assignment.user_kv_admin
+  ]
+  create_duration = "45s"
+}
 
-resource "azurerm_key_vault_key" "ci_cd_key" {
-  name         = "ci-cd-rsa-key"
-  key_vault_id = azurerm_key_vault.keyvault.id
-  key_type     = "RSA"
-  key_size     = 2048
+###############################################################
+# 6️⃣ Secretos (CREA O ADOPTA — NO FALLA)
+###############################################################
 
-  key_opts = ["decrypt", "encrypt", "sign", "unwrapKey", "verify"]
+resource "azurerm_key_vault_secret" "bd_datos" {
+  name         = "BDdatos"
+  value        = var.sql_database_name
+  key_vault_id = azurerm_key_vault.kv.id
 
-  rotation_policy {
-    automatic {
-      time_before_expiry = "P300D"
-    }
-
-    expire_after         = "P900D"
-    notify_before_expiry = "P31D"
+  lifecycle {
+    ignore_changes = [
+      value
+    ]
   }
+
+  depends_on = [time_sleep.wait_for_iam]
 }
 
-# ======================
-# 4. SQL SECRETS
-# ======================
-
-resource "azurerm_key_vault_secret" "db_username" {
-  name         = "db-username"
+resource "azurerm_key_vault_secret" "userbd" {
+  name         = "userbd"
   value        = var.sql_admin_login
-  key_vault_id = azurerm_key_vault.keyvault.id
+  key_vault_id = azurerm_key_vault.kv.id
+
+  lifecycle {
+    ignore_changes = [
+      value
+    ]
+  }
+
+  depends_on = [time_sleep.wait_for_iam]
 }
 
-resource "azurerm_key_vault_secret" "db_password" {
-  name         = "db-password"
+resource "azurerm_key_vault_secret" "passwordbd" {
+  name         = "passwordbd"
   value        = var.sql_admin_password
-  key_vault_id = azurerm_key_vault.keyvault.id
+  key_vault_id = azurerm_key_vault.kv.id
+
+  lifecycle {
+    ignore_changes = [
+      value
+    ]
+  }
+
+  depends_on = [time_sleep.wait_for_iam]
 }
 
-resource "azurerm_key_vault_secret" "db_database" {
-  name         = "db-database"
-  value        = var.database_name
-  key_vault_id = azurerm_key_vault.keyvault.id
+###############################################################
+# 7️⃣ Lectura final
+###############################################################
+
+data "azurerm_key_vault_secret" "bd_datos_read" {
+  name         = azurerm_key_vault_secret.bd_datos.name
+  key_vault_id = azurerm_key_vault.kv.id
 }
 
-# 🚫 ELIMINADO: este recurso NO DEBE ir en este workflow
-# resource "azurerm_role_assignment" "backend_kv_secrets" {
-#   scope                = azurerm_key_vault.keyvault.id
-#   role_definition_name = "Key Vault Secrets User"
-#   principal_id         = azurerm_linux_web_app.backend.identity[0].principal_id
-# }
+data "azurerm_key_vault_secret" "userbd_read" {
+  name         = azurerm_key_vault_secret.userbd.name
+  key_vault_id = azurerm_key_vault.kv.id
+}
+
+data "azurerm_key_vault_secret" "passwordbd_read" {
+  name         = azurerm_key_vault_secret.passwordbd.name
+  key_vault_id = azurerm_key_vault.kv.id
+}

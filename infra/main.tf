@@ -21,9 +21,11 @@ resource "azurerm_resource_group" "rg" {
   name     = var.resource_group_name
   location = var.location
 }
+
 # ============================================================
 # 0.2 - RED VIRTUAL
 # ============================================================
+
 resource "azurerm_virtual_network" "vnet" {
   name                = var.vnet_name
   location            = var.location
@@ -34,6 +36,7 @@ resource "azurerm_virtual_network" "vnet" {
 # -----------------------------
 # 0.2.1 - SUBNETS
 # -----------------------------
+
 resource "azurerm_subnet" "subnet_agw" {
   name                 = "subnet-agw"
   resource_group_name  = azurerm_resource_group.rg.name
@@ -79,7 +82,7 @@ resource "azurerm_subnet" "subnet_pe" {
 }
 
 # ============================================================
-#- APP SERVICES PLAN BACKEND
+# APP SERVICE PLAN (BackEnd)
 # ============================================================
 
 resource "azurerm_service_plan" "plan_backend" {
@@ -89,9 +92,11 @@ resource "azurerm_service_plan" "plan_backend" {
   os_type             = "Linux"
   sku_name            = "B1"
 }
+
 # ============================================================
-# 1.0 - APP SERVICES BACKEND
+# 1.0 - APP SERVICE BACKEND
 # ============================================================
+
 resource "azurerm_linux_web_app" "backend" {
   name                = var.app_service_name
   location            = var.location
@@ -107,6 +112,7 @@ resource "azurerm_linux_web_app" "backend" {
     application_stack {
       php_version = "8.2"
     }
+    # ⚠ Comando no soportado en Web App, pero lo dejo porque tú lo tienes
     app_command_line = "cp /home/site/wwwroot/default /etc/nginx/sites-available/default && service nginx reload"
   }
 
@@ -114,24 +120,39 @@ resource "azurerm_linux_web_app" "backend" {
     APP_ENV       = "production"
     APP_DEBUG     = "false"
     APP_KEY       = "base64:VwPBpk2jFkp2o1Y32nMP8hjuugrCeADr0HdmT8ku6Ro="
+
     DB_CONNECTION = "sqlsrv"
     DB_HOST       = azurerm_mssql_server.sql_server.fully_qualified_domain_name
     DB_DATABASE   = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/db-database/)"
     DB_USERNAME   = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/db-username/)"
     DB_PASSWORD   = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/db-password/)"
   }
-
 }
+
 # ======================
 # VNet Integration
 # ======================
+
 resource "azurerm_app_service_virtual_network_swift_connection" "subnet_integration" {
   app_service_id = azurerm_linux_web_app.backend.id
   subnet_id      = azurerm_subnet.subnet_integration.id
 }
+
 # ============================================================
-# 1.1 - KEY VAULT
+# 1.1 - KEY VAULT (CORREGIDO)
 # ============================================================
+
+resource "azurerm_key_vault" "kv" {
+  name                = var.key_vault_name
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  tenant_id           = var.tenant_id
+
+  sku_name                   = "standard"
+  soft_delete_retention_days = 7
+  purge_protection_enabled   = false
+  enable_rbac_authorization  = true
+}
 
 # ============================================================
 # 1.2 - SQL SERVER Y BASE DE DATOS
@@ -152,6 +173,7 @@ resource "azurerm_mssql_database" "database" {
   server_id = azurerm_mssql_server.sql_server.id
   sku_name  = "Basic"
 }
+
 # ============================================================
 # 1.3 - STORAGE ACCOUNT
 # ============================================================
@@ -165,7 +187,7 @@ resource "azurerm_storage_account" "storage" {
 }
 
 # ============================================================
-# 1.4 - PRIVATE ENDPOINTS SQL
+# 1.4 - PRIVATE ENDPOINT SQL
 # ============================================================
 
 resource "azurerm_private_endpoint" "pe_sql" {
@@ -183,7 +205,7 @@ resource "azurerm_private_endpoint" "pe_sql" {
 }
 
 # ============================================================
-# 1.5 - PRIVATE ENDPOINTS FRONT
+# 1.5 - PRIVATE ENDPOINT FRONTEND
 # ============================================================
 
 resource "azurerm_private_endpoint" "frontend_pe" {
@@ -199,9 +221,11 @@ resource "azurerm_private_endpoint" "frontend_pe" {
     is_manual_connection           = false
   }
 }
+
 # ============================================================
-# 1.6 - PRIVATE ENDPOINTS BACKEND
+# 1.6 - PRIVATE ENDPOINT BACKEND
 # ============================================================
+
 resource "azurerm_private_endpoint" "backend_pe" {
   name                = "pe-backend"
   location            = var.location
@@ -217,8 +241,9 @@ resource "azurerm_private_endpoint" "backend_pe" {
 }
 
 # ============================================================
-# - APP SERVICES PLAN FRONT
+# APP SERVICE PLAN (FRONTEND)
 # ============================================================
+
 resource "azurerm_service_plan" "plan_frontend" {
   name                = var.app_service_plan_name_web
   location            = var.location
@@ -228,8 +253,9 @@ resource "azurerm_service_plan" "plan_frontend" {
 }
 
 # ============================================================
-# 2.0 - APP SERVICES FRONT
+# WINDOWS WEB APP FRONTEND
 # ============================================================
+
 resource "azurerm_windows_web_app" "frontend" {
   name                = var.app_service_name_web
   location            = var.location
@@ -247,4 +273,3 @@ resource "azurerm_windows_web_app" "frontend" {
     WEBSITE_NODE_DEFAULT_VERSION = "~22"
   }
 }
-
