@@ -1,5 +1,5 @@
 ###############################################################
-# PROVIDERS (REQUIRED)
+# PROVIDERS
 ###############################################################
 
 terraform {
@@ -22,9 +22,8 @@ provider "azurerm" {
 }
 
 ###############################################################
-# 1️⃣ Key Vault EXISTENTE creado por main.tf
+# 1️⃣ Key Vault EXISTENTE (creado por main.tf)
 ###############################################################
-
 data "azurerm_key_vault" "kv" {
   name                = var.key_vault_name
   resource_group_name = var.resource_group_name
@@ -33,34 +32,30 @@ data "azurerm_key_vault" "kv" {
 ###############################################################
 # 2️⃣ Otros Data Sources
 ###############################################################
-
 data "azurerm_subscription" "primary" {}
 data "azurerm_client_config" "current" {}
 
 ###############################################################
-# 3️⃣ OIDC – GitHub → Key Vault Secrets Officer
+# 3️⃣ Rol: GitHub OIDC → Key Vault Secrets Officer
 ###############################################################
-
 resource "azurerm_role_assignment" "github_kv_secrets" {
-  scope                = azurerm_key_vault.kv.id
+  scope                = data.azurerm_key_vault.kv.id
   role_definition_name = "Key Vault Secrets Officer"
   principal_id         = var.github_principal_id
 }
 
 ###############################################################
-# 4️⃣ Usuario Admin → Key Vault Administrator
+# 4️⃣ Rol: Tu usuario → Key Vault Administrator
 ###############################################################
-
 resource "azurerm_role_assignment" "user_kv_admin" {
-  scope                = azurerm_key_vault.kv.id
+  scope                = data.azurerm_key_vault.kv.id
   role_definition_name = "Key Vault Administrator"
   principal_id         = var.admin_user_object_id
 }
 
 ###############################################################
-# 5️⃣ Espera Propagación IAM
+# 5️⃣ Espera que IAM se propague
 ###############################################################
-
 resource "time_sleep" "wait_for_iam" {
   depends_on = [
     azurerm_role_assignment.github_kv_secrets,
@@ -75,41 +70,28 @@ resource "time_sleep" "wait_for_iam" {
 
 resource "azurerm_key_vault_secret" "bd_datos" {
   name         = "db-database"
-  value        = var.sql_database_name
-  key_vault_id = azurerm_key_vault.kv.id
+  value        = var.database_name
+  key_vault_id = data.azurerm_key_vault.kv.id
 
-  lifecycle {
-    ignore_changes = [
-      value
-    ]
-  }
-
+  lifecycle { ignore_changes = [value] }
   depends_on = [time_sleep.wait_for_iam]
 }
 
 resource "azurerm_key_vault_secret" "userbd" {
   name         = "db-username"
   value        = var.sql_admin_login
-  key_vault_id = azurerm_key_vault.kv.id
+  key_vault_id = data.azurerm_key_vault.kv.id
 
-  lifecycle { 
-    ignore_changes = [
-      value
-      ]
-  }
+  lifecycle { ignore_changes = [value] }
   depends_on = [time_sleep.wait_for_iam]
 }
 
 resource "azurerm_key_vault_secret" "passwordbd" {
   name         = "db-password"
   value        = var.sql_admin_password
-  key_vault_id = azurerm_key_vault.kv.id
+  key_vault_id = data.azurerm_key_vault.kv.id
 
-  lifecycle {
-    ignore_changes = [
-      value
-    ]
-  }
+  lifecycle { ignore_changes = [value] }
   depends_on = [time_sleep.wait_for_iam]
 }
 
@@ -119,15 +101,15 @@ resource "azurerm_key_vault_secret" "passwordbd" {
 
 data "azurerm_key_vault_secret" "bd_datos_read" {
   name         = azurerm_key_vault_secret.bd_datos.name
-  key_vault_id = azurerm_key_vault.kv.id
+  key_vault_id = data.azurerm_key_vault.kv.id
 }
 
 data "azurerm_key_vault_secret" "userbd_read" {
   name         = azurerm_key_vault_secret.userbd.name
-  key_vault_id = azurerm_key_vault.kv.id
+  key_vault_id = data.azurerm_key_vault.kv.id
 }
 
 data "azurerm_key_vault_secret" "passwordbd_read" {
   name         = azurerm_key_vault_secret.passwordbd.name
-  key_vault_id = azurerm_key_vault.kv.id
+  key_vault_id = data.azurerm_key_vault.kv.id
 }
