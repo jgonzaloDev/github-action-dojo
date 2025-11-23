@@ -38,50 +38,47 @@ resource "time_sleep" "wait_for_iam" {
 # 6️⃣ Secretos (CREA O ADOPTA — NO FALLA)
 ###############################################################
 
+# 🗄 Nombre de la Base de Datos
 resource "azurerm_key_vault_secret" "bd_datos" {
-  name         = "BDdatos"
-  value        = var.sql_database_name
+  name         = "db-database"     # ✔ Nombre correcto
+  value        = var.database_name # ✔ Variable correcta
   key_vault_id = azurerm_key_vault.kv.id
 
   lifecycle {
-    ignore_changes = [
-      value
-    ]
+    ignore_changes = [value]
   }
 
   depends_on = [time_sleep.wait_for_iam]
 }
 
+# 👤 Usuario del SQL Server
 resource "azurerm_key_vault_secret" "userbd" {
-  name         = "userbd"
+  name         = "db-username"     # ✔ Nombre correcto
   value        = var.sql_admin_login
   key_vault_id = azurerm_key_vault.kv.id
 
   lifecycle {
-    ignore_changes = [
-      value
-    ]
+    ignore_changes = [value]
   }
 
   depends_on = [time_sleep.wait_for_iam]
 }
 
+# 🔐 Password del SQL Server
 resource "azurerm_key_vault_secret" "passwordbd" {
-  name         = "passwordbd"
+  name         = "db-password"     # ✔ Nombre correcto
   value        = var.sql_admin_password
   key_vault_id = azurerm_key_vault.kv.id
 
   lifecycle {
-    ignore_changes = [
-      value
-    ]
+    ignore_changes = [value]
   }
 
   depends_on = [time_sleep.wait_for_iam]
 }
 
 ###############################################################
-# 7️⃣ Lectura final
+# 7️⃣ Lectura final (solo lectura)
 ###############################################################
 
 data "azurerm_key_vault_secret" "bd_datos_read" {
