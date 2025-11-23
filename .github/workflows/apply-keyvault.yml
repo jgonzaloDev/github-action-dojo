@@ -28,32 +28,32 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # 4️⃣ Terraform Init en carpeta infra/keyvault
+      # 4️⃣ Terraform Init (solo carpeta keyvault)
       - name: Terraform Init (Key Vault)
         working-directory: infra/keyvault
         run: terraform init
 
-      # 5️⃣ Terraform Apply – SOLO KEY VAULT (roles + secretos)
+      # 5️⃣ Terraform Apply – SOLO KEY VAULT
       - name: Terraform Apply KEY VAULT
         working-directory: infra/keyvault
         run: terraform apply -auto-approve
         env:
           # 🔵 Azure básicos
-          TF_VAR_subscription_id:         ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          TF_VAR_tenant_id:               ${{ secrets.AZURE_TENANT_ID }}
-          TF_VAR_location:                ${{ secrets.TF_VAR_LOCATION }}
-          TF_VAR_resource_group_name:     ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
+          TF_VAR_subscription_id:     ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_tenant_id:           ${{ secrets.AZURE_TENANT_ID }}
+          TF_VAR_location:            ${{ secrets.TF_VAR_LOCATION }}
+          TF_VAR_resource_group_name: ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }}
 
           # 🔐 Key Vault
-          TF_VAR_key_vault_name:          ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
+          TF_VAR_key_vault_name:      ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
 
-          # 🧑‍💼 Tu usuario como Key Vault Admin
-          TF_VAR_admin_user_object_id:    ${{ secrets.TF_VAR_ADMIN_USER_OBJECT_ID }}
+          # 🧑‍💼 Tu usuario (Admin)
+          TF_VAR_admin_user_object_id: ${{ secrets.TF_VAR_ADMIN_USER_OBJECT_ID }}
 
-          # 🤝 GitHub OIDC Service Principal (Secrets Officer)
-          TF_VAR_github_principal_id:     ${{ secrets.TF_VAR_GITHUB_PRINCIPAL_ID }}
+          # 🤝 GitHub OIDC (Secrets Officer)
+          TF_VAR_github_principal_id: ${{ secrets.TF_VAR_GITHUB_PRINCIPAL_ID }}
 
-          # 🔢 Datos de BD usados para los secretos
-          TF_VAR_database_name:           ${{ secrets.TF_VAR_DATABASE_NAME }}
-          TF_VAR_sql_admin_login:         ${{ secrets.TF_VAR_SQL_ADMIN_LOGIN }}
-          TF_VAR_sql_admin_password:      ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
+          # 🐘 Secretos SQL
+          TF_VAR_database_name:       ${{ secrets.TF_VAR_DATABASE_NAME }}
+          TF_VAR_sql_admin_login:     ${{ secrets.TF_VAR_SQL_ADMIN_LOGIN }}
+          TF_VAR_sql_admin_password:  ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
