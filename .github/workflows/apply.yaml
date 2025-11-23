@@ -63,6 +63,12 @@ jobs:
           # 🔐 Key Vault (solo el recurso, sin roles aún)
           TF_VAR_key_vault_name:              ${{ secrets.TF_VAR_KEY_VAULT_NAME }}
 
+          # 🧑‍💼 Tu usuario como Key Vault Admin
+          TF_VAR_admin_user_object_id:    ${{ secrets.TF_VAR_ADMIN_USER_OBJECT_ID }}
+
+          # 🤝 GitHub OIDC Service Principal (Secrets Officer)
+          TF_VAR_github_principal_id:     ${{ secrets.TF_VAR_GITHUB_PRINCIPAL_ID }}
+
           # 📦 Storage
           TF_VAR_storage_account_name:        ${{ secrets.TF_VAR_STORAGE_ACCOUNT_NAME }}
 
