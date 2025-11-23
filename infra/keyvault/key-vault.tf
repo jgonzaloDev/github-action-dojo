@@ -1,5 +1,13 @@
 # ======================
-# DATA SOURCES NECESARIOS
+# DATA SOURCE DEL KEY VAULT EXISTENTE
+# ======================
+data "azurerm_key_vault" "kv" {
+  name                = var.key_vault_name
+  resource_group_name = var.resource_group_name
+}
+
+# ======================
+# DATA SOURCES OPCIONALES
 # ======================
 
 data "azurerm_subscription" "primary" {}
@@ -9,7 +17,7 @@ data "azurerm_client_config" "current" {}
 # 3️⃣ GitHub OIDC → Key Vault Secrets Officer
 ###############################################################
 resource "azurerm_role_assignment" "github_kv_secrets" {
-  scope                = azurerm_key_vault.kv.id
+  scope                = data.azurerm_key_vault.kv.id
   role_definition_name = "Key Vault Secrets Officer"
   principal_id         = var.github_principal_id
 }
@@ -18,7 +26,7 @@ resource "azurerm_role_assignment" "github_kv_secrets" {
 # 4️⃣ Tu Usuario → Key Vault Administrator
 ###############################################################
 resource "azurerm_role_assignment" "user_kv_admin" {
-  scope                = azurerm_key_vault.kv.id
+  scope                = data.azurerm_key_vault.kv.id
   role_definition_name = "Key Vault Administrator"
   principal_id         = var.admin_user_object_id
 }
@@ -40,9 +48,9 @@ resource "time_sleep" "wait_for_iam" {
 
 # 🗄 Nombre de la Base de Datos
 resource "azurerm_key_vault_secret" "bd_datos" {
-  name         = "db-database"     # ✔ Nombre correcto
-  value        = var.database_name # ✔ Variable correcta
-  key_vault_id = azurerm_key_vault.kv.id
+  name         = "db-database"
+  value        = var.database_name
+  key_vault_id = data.azurerm_key_vault.kv.id
 
   lifecycle {
     ignore_changes = [value]
@@ -53,9 +61,9 @@ resource "azurerm_key_vault_secret" "bd_datos" {
 
 # 👤 Usuario del SQL Server
 resource "azurerm_key_vault_secret" "userbd" {
-  name         = "db-username"     # ✔ Nombre correcto
+  name         = "db-username"
   value        = var.sql_admin_login
-  key_vault_id = azurerm_key_vault.kv.id
+  key_vault_id = data.azurerm_key_vault.kv.id
 
   lifecycle {
     ignore_changes = [value]
@@ -66,9 +74,9 @@ resource "azurerm_key_vault_secret" "userbd" {
 
 # 🔐 Password del SQL Server
 resource "azurerm_key_vault_secret" "passwordbd" {
-  name         = "db-password"     # ✔ Nombre correcto
+  name         = "db-password"
   value        = var.sql_admin_password
-  key_vault_id = azurerm_key_vault.kv.id
+  key_vault_id = data.azurerm_key_vault.kv.id
 
   lifecycle {
     ignore_changes = [value]
@@ -83,15 +91,15 @@ resource "azurerm_key_vault_secret" "passwordbd" {
 
 data "azurerm_key_vault_secret" "bd_datos_read" {
   name         = azurerm_key_vault_secret.bd_datos.name
-  key_vault_id = azurerm_key_vault.kv.id
+  key_vault_id = data.azurerm_key_vault.kv.id
 }
 
 data "azurerm_key_vault_secret" "userbd_read" {
   name         = azurerm_key_vault_secret.userbd.name
-  key_vault_id = azurerm_key_vault.kv.id
+  key_vault_id = data.azurerm_key_vault.kv.id
 }
 
 data "azurerm_key_vault_secret" "passwordbd_read" {
   name         = azurerm_key_vault_secret.passwordbd.name
-  key_vault_id = azurerm_key_vault.kv.id
+  key_vault_id = data.azurerm_key_vault.kv.id
 }
