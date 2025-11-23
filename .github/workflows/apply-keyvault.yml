@@ -56,6 +56,8 @@ jobs:
           TF_VAR_cert_data:               ${{ secrets.TF_VAR_cert_data }}
           TF_VAR_cert_password:           ${{ secrets.TF_VAR_CERT_PASSWORD }}
           TF_VAR_azure_client_id:         ${{ secrets.AZURE_CLIENT_ID }}
+          TF_VAR_github_principal_id: ${{ secrets.GITHUB_PRINCIPAL_ID }}
+          TF_VAR_admin_user_object_id: ${{ secrets.ADMIN_USER_OBJECT_ID }}
 
       #############################
       # ⏳ ESPERA 3 MIN (RBAC)    #
@@ -98,3 +100,5 @@ jobs:
           TF_VAR_cert_data:               ${{ secrets.TF_VAR_cert_data }}
           TF_VAR_cert_password:           ${{ secrets.TF_VAR_CERT_PASSWORD }}
           TF_VAR_azure_client_id:         ${{ secrets.AZURE_CLIENT_ID }}
+          TF_VAR_github_principal_id: ${{ secrets.GITHUB_PRINCIPAL_ID }}
+          TF_VAR_admin_user_object_id: ${{ secrets.ADMIN_USER_OBJECT_ID }}

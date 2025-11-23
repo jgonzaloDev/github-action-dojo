@@ -131,3 +131,17 @@ variable "azure_client_id" {
   description = "Client ID de la identidad federada de GitHub (OIDC)"
   type        = string
 }
+
+# ============================================================
+# KEY VAULT – ROLES (GitHub OIDC y tu usuario admin)
+# ============================================================
+
+variable "github_principal_id" {
+  description = "Object ID del Service Principal federado (OIDC) usado por GitHub Actions"
+  type        = string
+}
+
+variable "admin_user_object_id" {
+  description = "Object ID de tu usuario personal en Azure AD (para rol Key Vault Admin)"
+  type        = string
+}
