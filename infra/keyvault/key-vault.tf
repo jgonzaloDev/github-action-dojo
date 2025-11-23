@@ -1,21 +1,46 @@
-# ======================
-# DATA SOURCE DEL KEY VAULT EXISTENTE
-# ======================
+###############################################################
+# PROVIDERS (REQUIRED)
+###############################################################
+
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 4.34.0"
+    }
+    time = {
+      source = "hashicorp/time"
+      version = "~> 0.9"
+    }
+  }
+}
+
+provider "azurerm" {
+  features {}
+  subscription_id = var.subscription_id
+  tenant_id       = var.tenant_id
+}
+
+###############################################################
+# 1️⃣ Key Vault EXISTENTE creado por main.tf
+###############################################################
+
 data "azurerm_key_vault" "kv" {
   name                = var.key_vault_name
   resource_group_name = var.resource_group_name
 }
 
-# ======================
-# DATA SOURCES OPCIONALES
-# ======================
+###############################################################
+# 2️⃣ Otros Data Sources
+###############################################################
 
 data "azurerm_subscription" "primary" {}
 data "azurerm_client_config" "current" {}
 
 ###############################################################
-# 3️⃣ GitHub OIDC → Key Vault Secrets Officer
+# 3️⃣ OIDC – GitHub → Key Vault Secrets Officer
 ###############################################################
+
 resource "azurerm_role_assignment" "github_kv_secrets" {
   scope                = data.azurerm_key_vault.kv.id
   role_definition_name = "Key Vault Secrets Officer"
@@ -23,8 +48,9 @@ resource "azurerm_role_assignment" "github_kv_secrets" {
 }
 
 ###############################################################
-# 4️⃣ Tu Usuario → Key Vault Administrator
+# 4️⃣ Usuario Admin → Key Vault Administrator
 ###############################################################
+
 resource "azurerm_role_assignment" "user_kv_admin" {
   scope                = data.azurerm_key_vault.kv.id
   role_definition_name = "Key Vault Administrator"
@@ -32,8 +58,9 @@ resource "azurerm_role_assignment" "user_kv_admin" {
 }
 
 ###############################################################
-# 5️⃣ Espera propagación IAM
+# 5️⃣ Espera Propagación IAM
 ###############################################################
+
 resource "time_sleep" "wait_for_iam" {
   depends_on = [
     azurerm_role_assignment.github_kv_secrets,
@@ -43,50 +70,38 @@ resource "time_sleep" "wait_for_iam" {
 }
 
 ###############################################################
-# 6️⃣ Secretos (CREA O ADOPTA — NO FALLA)
+# 6️⃣ Secretos
 ###############################################################
 
-# 🗄 Nombre de la Base de Datos
 resource "azurerm_key_vault_secret" "bd_datos" {
   name         = "db-database"
   value        = var.database_name
   key_vault_id = data.azurerm_key_vault.kv.id
+  depends_on   = [time_sleep.wait_for_iam]
 
-  lifecycle {
-    ignore_changes = [value]
-  }
-
-  depends_on = [time_sleep.wait_for_iam]
+  lifecycle { ignore_changes = [value] }
 }
 
-# 👤 Usuario del SQL Server
 resource "azurerm_key_vault_secret" "userbd" {
   name         = "db-username"
   value        = var.sql_admin_login
   key_vault_id = data.azurerm_key_vault.kv.id
+  depends_on   = [time_sleep.wait_for_iam]
 
-  lifecycle {
-    ignore_changes = [value]
-  }
-
-  depends_on = [time_sleep.wait_for_iam]
+  lifecycle { ignore_changes = [value] }
 }
 
-# 🔐 Password del SQL Server
 resource "azurerm_key_vault_secret" "passwordbd" {
   name         = "db-password"
   value        = var.sql_admin_password
   key_vault_id = data.azurerm_key_vault.kv.id
+  depends_on   = [time_sleep.wait_for_iam]
 
-  lifecycle {
-    ignore_changes = [value]
-  }
-
-  depends_on = [time_sleep.wait_for_iam]
+  lifecycle { ignore_changes = [value] }
 }
 
 ###############################################################
-# 7️⃣ Lectura final (solo lectura)
+# 7️⃣ Lectura Final
 ###############################################################
 
 data "azurerm_key_vault_secret" "bd_datos_read" {
