@@ -119,7 +119,6 @@ resource "azurerm_linux_web_app" "backend" {
       php_version = "8.2"
     }
 
-    # (Tu comando personalizado)
     app_command_line = "cp /home/site/wwwroot/default /etc/nginx/sites-available/default && service nginx reload"
   }
 
@@ -189,7 +188,7 @@ resource "time_sleep" "wait_for_iam" {
 
 resource "azurerm_key_vault_secret" "db_database" {
   name         = "db-database"
-  value        = var.sql_database_name
+  value        = var.database_name
   key_vault_id = azurerm_key_vault.kv.id
   lifecycle { ignore_changes = [value] }
   depends_on = [time_sleep.wait_for_iam]
@@ -209,22 +208,6 @@ resource "azurerm_key_vault_secret" "db_password" {
   key_vault_id = azurerm_key_vault.kv.id
   lifecycle { ignore_changes = [value] }
   depends_on = [time_sleep.wait_for_iam]
-}
-
-# Lectura final (opcional)
-data "azurerm_key_vault_secret" "db_database_read" {
-  name         = azurerm_key_vault_secret.db_database.name
-  key_vault_id = azurerm_key_vault.kv.id
-}
-
-data "azurerm_key_vault_secret" "db_username_read" {
-  name         = azurerm_key_vault_secret.db_username.name
-  key_vault_id = azurerm_key_vault.kv.id
-}
-
-data "azurerm_key_vault_secret" "db_password_read" {
-  name         = azurerm_key_vault_secret.db_password.name
-  key_vault_id = azurerm_key_vault.kv.id
 }
 
 # ============================================================
@@ -273,34 +256,6 @@ resource "azurerm_private_endpoint" "pe_sql" {
     name                           = "sql-connection"
     private_connection_resource_id = azurerm_mssql_server.sql_server.id
     subresource_names              = ["sqlServer"]
-    is_manual_connection           = false
-  }
-}
-
-resource "azurerm_private_endpoint" "frontend_pe" {
-  name                = "pe-frontend"
-  location            = var.location
-  resource_group_name = azurerm_resource_group.rg.name
-  subnet_id           = azurerm_subnet.subnet_pe.id
-
-  private_service_connection {
-    name                           = "frontend-connection"
-    private_connection_resource_id = azurerm_windows_web_app.frontend.id
-    subresource_names              = ["sites"]
-    is_manual_connection           = false
-  }
-}
-
-resource "azurerm_private_endpoint" "backend_pe" {
-  name                = "pe-backend"
-  location            = var.location
-  resource_group_name = azurerm_resource_group.rg.name
-  subnet_id           = azurerm_subnet.subnet_pe.id
-
-  private_service_connection {
-    name                           = "backend-connection"
-    private_connection_resource_id = azurerm_linux_web_app.backend.id
-    subresource_names              = ["sites"]
     is_manual_connection           = false
   }
 }
