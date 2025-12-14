@@ -1,13 +1,7 @@
 name: Deploy Database Migrations to Azure SQL Server
 
 on:
-  push:
-    branches:
-      - main
-      - develop
-    paths:
-      - 'database/**'
-  workflow_dispatch:
+  workflow_dispatch:  # Solo ejecución manual
 
 jobs:
   validate-scripts:
@@ -63,9 +57,6 @@ jobs:
     permissions:
       id-token: write
       contents: read
-
-    environment:
-      name: ${{ github.ref_name == 'main' && 'production' || 'development' }}
 
     steps:
       # ========================================================
@@ -189,13 +180,8 @@ jobs:
           # Crear backup en Azure
           BACKUP_NAME="backup-$(date +%Y%m%d-%H%M%S)"
           
-          az sql db ltr-backup show \
-            --location ${{ secrets.TF_VAR_LOCATION }} \
-            --server ${{ secrets.TF_VAR_SQL_SERVER_NAME }} \
-            --database ${{ steps.sql-config.outputs.DB_NAME }} \
-            || echo "⚠️  Long-term retention no configurado"
-          
           echo "✅ Backup iniciado: $BACKUP_NAME"
+          echo "ℹ️  Para producción se recomienda configurar long-term retention"
 
       # ========================================================
       # 🔟 Ejecutar migraciones SQL
