@@ -125,10 +125,9 @@ resource "azurerm_linux_web_app" "backend" {
   app_settings = {
     APP_ENV   = "production"
     APP_DEBUG = "false"
-
+    APP_KEY   = "base64:VwPBpk2jFkp2o1Y32nMP8hjuugrCeADr0HdmT8ku6Ro="
     DB_CONNECTION = "sqlsrv"
     DB_HOST       = azurerm_mssql_server.sql_server.fully_qualified_domain_name
-
     DB_DATABASE = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/db-database/)"
     DB_USERNAME = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/db-username/)"
     DB_PASSWORD = "@Microsoft.KeyVault(SecretUri=https://${var.key_vault_name}.vault.azure.net/secrets/db-password/)"
