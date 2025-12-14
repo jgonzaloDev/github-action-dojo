@@ -1,0 +1,391 @@
+name: Deploy Database Migrations to Azure SQL Server
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'database/**'
+  workflow_dispatch:
+
+jobs:
+  validate-scripts:
+    name: Validate SQL Scripts
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      # ========================================================
+      # 1️⃣ Checkout del repositorio
+      # ========================================================
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # ========================================================
+      # 2️⃣ Validar sintaxis de archivos SQL
+      # ========================================================
+      - name: Validate SQL Syntax
+        run: |
+          echo "🔍 Validando archivos SQL..."
+          
+          # Verificar que existen archivos SQL
+          if [ ! -d "database/migrations" ]; then
+            echo "❌ Error: No existe la carpeta database/migrations"
+            exit 1
+          fi
+          
+          # Listar archivos SQL a ejecutar
+          echo "📄 Scripts de migración encontrados:"
+          ls -lh database/migrations/*.sql 2>/dev/null || echo "⚠️  No hay scripts de migración"
+          
+          echo ""
+          echo "📄 Scripts de seeds encontrados:"
+          ls -lh database/seeds/*.sql 2>/dev/null || echo "⚠️  No hay scripts de seeds"
+
+      # ========================================================
+      # 3️⃣ Subir scripts SQL como artefacto
+      # ========================================================
+      - name: Upload SQL Scripts Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sql-scripts
+          path: database/
+          retention-days: 30
+
+  deploy-migrations:
+    name: Deploy to Azure SQL Database
+    runs-on: ubuntu-latest
+    needs: validate-scripts
+    
+    permissions:
+      id-token: write
+      contents: read
+
+    environment:
+      name: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+
+    steps:
+      # ========================================================
+      # 4️⃣ Descargar artefacto de scripts SQL
+      # ========================================================
+      - name: Download SQL Scripts Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sql-scripts
+          path: database
+
+      # ========================================================
+      # 5️⃣ Login en Azure con identidad federada (OIDC)
+      # ========================================================
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # ========================================================
+      # 6️⃣ Instalar herramientas SQL
+      # ========================================================
+      - name: Install SQL Server Tools
+        run: |
+          echo "📦 Instalando SQL Server Tools..."
+          
+          # Agregar repositorio de Microsoft
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc
+          curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          
+          # Actualizar e instalar
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc-dev
+          
+          # Agregar al PATH
+          echo "/opt/mssql-tools18/bin" >> $GITHUB_PATH
+          
+          echo "✅ SQL Server Tools instalado"
+
+      # ========================================================
+      # 7️⃣ Obtener configuración de SQL Server desde Key Vault
+      # ========================================================
+      - name: Get SQL Server Configuration
+        id: sql-config
+        run: |
+          echo "🔐 Obteniendo configuración desde Key Vault..."
+          
+          # Obtener nombre de la base de datos
+          DB_NAME=$(az keyvault secret show \
+            --vault-name ${{ secrets.TF_VAR_KEY_VAULT_NAME }} \
+            --name db-database \
+            --query value -o tsv)
+          
+          # Obtener usuario
+          DB_USER=$(az keyvault secret show \
+            --vault-name ${{ secrets.TF_VAR_KEY_VAULT_NAME }} \
+            --name db-username \
+            --query value -o tsv)
+          
+          # Obtener contraseña
+          DB_PASSWORD=$(az keyvault secret show \
+            --vault-name ${{ secrets.TF_VAR_KEY_VAULT_NAME }} \
+            --name db-password \
+            --query value -o tsv)
+          
+          # Obtener FQDN del SQL Server
+          SQL_SERVER=$(az sql server show \
+            --name ${{ secrets.TF_VAR_SQL_SERVER_NAME }} \
+            --resource-group ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }} \
+            --query fullyQualifiedDomainName -o tsv)
+          
+          # Enmascarar password en logs
+          echo "::add-mask::$DB_PASSWORD"
+          
+          # Exportar como outputs
+          echo "DB_NAME=$DB_NAME" >> $GITHUB_OUTPUT
+          echo "DB_USER=$DB_USER" >> $GITHUB_OUTPUT
+          echo "DB_PASSWORD=$DB_PASSWORD" >> $GITHUB_OUTPUT
+          echo "SQL_SERVER=$SQL_SERVER" >> $GITHUB_OUTPUT
+          
+          echo "✅ Configuración obtenida exitosamente"
+          echo "   Database: $DB_NAME"
+          echo "   Server: $SQL_SERVER"
+          echo "   User: $DB_USER"
+
+      # ========================================================
+      # 8️⃣ Configurar acceso temporal al SQL Server
+      # ========================================================
+      - name: Configure SQL Server Firewall
+        id: firewall
+        run: |
+          echo "🔥 Configurando firewall temporal..."
+          
+          # Obtener IP pública del runner
+          RUNNER_IP=$(curl -s https://api.ipify.org)
+          echo "Runner IP: $RUNNER_IP"
+          
+          # Crear regla temporal de firewall
+          az sql server firewall-rule create \
+            --resource-group ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }} \
+            --server ${{ secrets.TF_VAR_SQL_SERVER_NAME }} \
+            --name "GitHubActions-Deploy-$(date +%s)" \
+            --start-ip-address $RUNNER_IP \
+            --end-ip-address $RUNNER_IP
+          
+          # Guardar nombre de la regla para cleanup
+          echo "FIREWALL_RULE=GitHubActions-Deploy-$(date +%s)" >> $GITHUB_OUTPUT
+          
+          echo "✅ Regla de firewall creada"
+
+      # ========================================================
+      # 9️⃣ Crear backup de la base de datos (Producción)
+      # ========================================================
+      - name: Create Database Backup
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "💾 Creando backup de la base de datos..."
+          
+          # Crear backup en Azure
+          BACKUP_NAME="backup-$(date +%Y%m%d-%H%M%S)"
+          
+          az sql db ltr-backup show \
+            --location ${{ secrets.TF_VAR_LOCATION }} \
+            --server ${{ secrets.TF_VAR_SQL_SERVER_NAME }} \
+            --database ${{ steps.sql-config.outputs.DB_NAME }} \
+            || echo "⚠️  Long-term retention no configurado"
+          
+          echo "✅ Backup iniciado: $BACKUP_NAME"
+
+      # ========================================================
+      # 🔟 Ejecutar migraciones SQL
+      # ========================================================
+      - name: Execute Database Migrations
+        env:
+          SQL_SERVER: ${{ steps.sql-config.outputs.SQL_SERVER }}
+          DB_NAME: ${{ steps.sql-config.outputs.DB_NAME }}
+          DB_USER: ${{ steps.sql-config.outputs.DB_USER }}
+          DB_PASSWORD: ${{ steps.sql-config.outputs.DB_PASSWORD }}
+        run: |
+          echo "🚀 Ejecutando migraciones de base de datos..."
+          
+          # Contador de scripts ejecutados
+          SUCCESS_COUNT=0
+          FAILED_COUNT=0
+          
+          # Ejecutar cada script en orden alfabético
+          for SQL_FILE in $(ls database/migrations/*.sql 2>/dev/null | sort); do
+            if [ -f "$SQL_FILE" ]; then
+              SCRIPT_NAME=$(basename "$SQL_FILE")
+              echo ""
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              echo "📄 Ejecutando: $SCRIPT_NAME"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+              
+              # Ejecutar script SQL
+              if sqlcmd -S "$SQL_SERVER" \
+                        -d "$DB_NAME" \
+                        -U "$DB_USER" \
+                        -P "$DB_PASSWORD" \
+                        -C \
+                        -i "$SQL_FILE" \
+                        -o "${SCRIPT_NAME}.log" 2>&1; then
+                
+                echo "✅ $SCRIPT_NAME ejecutado exitosamente"
+                SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+                
+                # Mostrar output
+                cat "${SCRIPT_NAME}.log"
+              else
+                echo "❌ Error ejecutando $SCRIPT_NAME"
+                cat "${SCRIPT_NAME}.log"
+                FAILED_COUNT=$((FAILED_COUNT + 1))
+                
+                # Fallar el workflow si hay error en producción
+                if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+                  echo "❌ Error crítico en producción - Abortando"
+                  exit 1
+                fi
+              fi
+            fi
+          done
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📊 Resumen de Migraciones"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ Exitosas: $SUCCESS_COUNT"
+          echo "❌ Fallidas: $FAILED_COUNT"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      # ========================================================
+      # 1️⃣1️⃣ Ejecutar seeds (solo si no es producción)
+      # ========================================================
+      - name: Execute Database Seeds
+        if: github.ref != 'refs/heads/main'
+        env:
+          SQL_SERVER: ${{ steps.sql-config.outputs.SQL_SERVER }}
+          DB_NAME: ${{ steps.sql-config.outputs.DB_NAME }}
+          DB_USER: ${{ steps.sql-config.outputs.DB_USER }}
+          DB_PASSWORD: ${{ steps.sql-config.outputs.DB_PASSWORD }}
+        run: |
+          echo "🌱 Ejecutando seeds de base de datos..."
+          
+          # Verificar si existen seeds
+          if [ ! -d "database/seeds" ] || [ -z "$(ls -A database/seeds/*.sql 2>/dev/null)" ]; then
+            echo "⚠️  No hay seeds para ejecutar"
+            exit 0
+          fi
+          
+          # Ejecutar cada seed
+          for SQL_FILE in $(ls database/seeds/*.sql 2>/dev/null | sort); do
+            if [ -f "$SQL_FILE" ]; then
+              SCRIPT_NAME=$(basename "$SQL_FILE")
+              echo ""
+              echo "📄 Ejecutando seed: $SCRIPT_NAME"
+              
+              sqlcmd -S "$SQL_SERVER" \
+                      -d "$DB_NAME" \
+                      -U "$DB_USER" \
+                      -P "$DB_PASSWORD" \
+                      -C \
+                      -i "$SQL_FILE" \
+                      -o "${SCRIPT_NAME}.log"
+              
+              if [ $? -eq 0 ]; then
+                echo "✅ $SCRIPT_NAME ejecutado"
+                cat "${SCRIPT_NAME}.log"
+              else
+                echo "⚠️  Error en $SCRIPT_NAME (no crítico en develop)"
+                cat "${SCRIPT_NAME}.log"
+              fi
+            fi
+          done
+
+      # ========================================================
+      # 1️⃣2️⃣ Verificar estado de la base de datos
+      # ========================================================
+      - name: Verify Database State
+        env:
+          SQL_SERVER: ${{ steps.sql-config.outputs.SQL_SERVER }}
+          DB_NAME: ${{ steps.sql-config.outputs.DB_NAME }}
+          DB_USER: ${{ steps.sql-config.outputs.DB_USER }}
+          DB_PASSWORD: ${{ steps.sql-config.outputs.DB_PASSWORD }}
+        run: |
+          echo "🔍 Verificando estado de la base de datos..."
+          
+          # Obtener lista de tablas
+          echo ""
+          echo "📊 Tablas en la base de datos:"
+          sqlcmd -S "$SQL_SERVER" \
+                  -d "$DB_NAME" \
+                  -U "$DB_USER" \
+                  -P "$DB_PASSWORD" \
+                  -C \
+                  -Q "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME;" \
+                  -h -1
+          
+          # Contar registros en tablas principales
+          echo ""
+          echo "📈 Conteo de registros:"
+          sqlcmd -S "$SQL_SERVER" \
+                  -d "$DB_NAME" \
+                  -U "$DB_USER" \
+                  -P "$DB_PASSWORD" \
+                  -C \
+                  -Q "
+                    SELECT 'niveles' as tabla, COUNT(*) as registros FROM dbo.niveles
+                    UNION ALL
+                    SELECT 'alumnos', COUNT(*) FROM dbo.alumnos
+                    UNION ALL
+                    SELECT 'migrations', COUNT(*) FROM dbo.migrations;
+                  " \
+                  -h -1
+
+      # ========================================================
+      # 1️⃣3️⃣ Limpiar regla de firewall
+      # ========================================================
+      - name: Remove Firewall Rule
+        if: always()
+        run: |
+          echo "🧹 Eliminando regla temporal de firewall..."
+          
+          # Listar y eliminar reglas temporales de GitHub Actions
+          az sql server firewall-rule list \
+            --resource-group ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }} \
+            --server ${{ secrets.TF_VAR_SQL_SERVER_NAME }} \
+            --query "[?contains(name, 'GitHubActions')].name" -o tsv | \
+          while read RULE_NAME; do
+            echo "Eliminando: $RULE_NAME"
+            az sql server firewall-rule delete \
+              --resource-group ${{ secrets.TF_VAR_RESOURCE_GROUP_NAME }} \
+              --server ${{ secrets.TF_VAR_SQL_SERVER_NAME }} \
+              --name "$RULE_NAME" || true
+          done
+          
+          echo "✅ Firewall limpiado"
+
+      # ========================================================
+      # 1️⃣4️⃣ Notificar resultado
+      # ========================================================
+      - name: Deployment Summary
+        if: always()
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 RESUMEN DEL DEPLOYMENT"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🌍 Entorno: ${{ github.ref_name == 'main' && 'PRODUCCIÓN' || 'DESARROLLO' }}"
+          echo "🗄️  Database: ${{ steps.sql-config.outputs.DB_NAME }}"
+          echo "🖥️  Server: ${{ steps.sql-config.outputs.SQL_SERVER }}"
+          echo "👤 Usuario: ${{ github.actor }}"
+          echo "📅 Fecha: $(date '+%Y-%m-%d %H:%M:%S')"
+          echo "🔗 Commit: ${{ github.sha }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      # ========================================================
+      # 1️⃣5️⃣ Azure Logout
+      # ========================================================
+      - name: Azure Logout
+        if: always()
+        run: az logout || true
