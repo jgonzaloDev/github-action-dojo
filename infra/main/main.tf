@@ -277,13 +277,26 @@ resource "azurerm_windows_web_app" "frontend" {
 }
 
 # =================================================================================
+# Public IP para Application Gateway
+# ================================================================================
+resource "azurerm_public_ip" "appgw_ip" {
+  name                = "appgw-public-ip"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.rg.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+}
+
+# =================================================================================
 # Private Endpoints
 # ================================================================================
+
+# ✅ CORREGIDO: Ahora usa subnet_pe en lugar de privateend
 resource "azurerm_private_endpoint" "backend_pe" {
   name                = "pe-backend"
   location            = var.location
-  resource_group_name = var.resource_group_name
-  subnet_id           = azurerm_subnet.privateend.id
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = azurerm_subnet.subnet_pe.id
 
   private_service_connection {
     name                           = "backend-connection"
@@ -293,16 +306,17 @@ resource "azurerm_private_endpoint" "backend_pe" {
   }
 
   depends_on = [
-    azurerm_subnet.privateend,
+    azurerm_subnet.subnet_pe,
     azurerm_linux_web_app.backend
   ]
 }
 
+# ✅ CORREGIDO: Ahora usa subnet_pe en lugar de privateend
 resource "azurerm_private_endpoint" "frontend_pe" {
   name                = "pe-frontend"
   location            = var.location
-  resource_group_name = var.resource_group_name
-  subnet_id           = azurerm_subnet.privateend.id
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = azurerm_subnet.subnet_pe.id
 
   private_service_connection {
     name                           = "frontend-connection"
@@ -312,16 +326,17 @@ resource "azurerm_private_endpoint" "frontend_pe" {
   }
 
   depends_on = [
-    azurerm_subnet.privateend,
+    azurerm_subnet.subnet_pe,
     azurerm_windows_web_app.frontend
   ]
 }
 
+# ✅ CORREGIDO: Ahora usa subnet_pe en lugar de sql
 resource "azurerm_private_endpoint" "sql_pe" {
   name                = "pe-sqlserver1"
   location            = var.location
-  resource_group_name = var.resource_group_name
-  subnet_id           = azurerm_subnet.sql.id
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = azurerm_subnet.subnet_pe.id
 
   private_service_connection {
     name                           = "sqlserver1-connection"
@@ -331,53 +346,59 @@ resource "azurerm_private_endpoint" "sql_pe" {
   }
 
   depends_on = [
-    azurerm_subnet.sql,
+    azurerm_subnet.subnet_pe,
     azurerm_mssql_server.sql_server
   ]
 }
 
+# ✅ CORREGIDO: Ahora usa subnet_pe y referencia directa al Key Vault
 resource "azurerm_private_endpoint" "keyvault_pe" {
   name                = "pe-keyvault"
   location            = var.location
-  resource_group_name = var.resource_group_name
-  subnet_id           = azurerm_subnet.keyvault.id
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = azurerm_subnet.subnet_pe.id
 
   private_service_connection {
     name                           = "keyvault-connection"
-    private_connection_resource_id = "/subscriptions/${data.azurerm_subscription.primary.subscription_id}/resourceGroups/${var.resource_group_name}/providers/Microsoft.KeyVault/vaults/${var.key_vault_name}"
+    private_connection_resource_id = azurerm_key_vault.kv.id
     subresource_names              = ["vault"]
     is_manual_connection           = false
   }
 
   depends_on = [
-    azurerm_subnet.keyvault,
-    azurerm_virtual_network.vnet
+    azurerm_subnet.subnet_pe,
+    azurerm_key_vault.kv
   ]
 }
 
+# ✅ CORREGIDO: Ahora usa subnet_pe y referencia directa al Storage Account
 resource "azurerm_private_endpoint" "blob_pe" {
   name                = "pe-blobstorage"
   location            = var.location
-  resource_group_name = var.resource_group_name
-  subnet_id           = azurerm_subnet.blobstorage.id
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = azurerm_subnet.subnet_pe.id
 
   private_service_connection {
     name                           = "blob-connection"
-    private_connection_resource_id = "/subscriptions/${data.azurerm_subscription.primary.subscription_id}/resourceGroups/${var.resource_group_name}/providers/Microsoft.Storage/storageAccounts/${var.storage_account_name}"
+    private_connection_resource_id = azurerm_storage_account.storage.id
     subresource_names              = ["blob"]
     is_manual_connection           = false
   }
 
   depends_on = [
-    azurerm_subnet.blobstorage,
-    azurerm_virtual_network.vnet
+    azurerm_subnet.subnet_pe,
+    azurerm_storage_account.storage
   ]
 }
+
+# =================================================================================
+# Application Gateway
+# ================================================================================
 
 resource "azurerm_application_gateway" "appgw" {
   name                = "dojo-appgw"
   location            = var.location
-  resource_group_name = var.resource_group_name
+  resource_group_name = azurerm_resource_group.rg.name
 
   sku {
     name     = "Standard_v2"
@@ -387,7 +408,7 @@ resource "azurerm_application_gateway" "appgw" {
 
   gateway_ip_configuration {
     name      = "appgw-ip-config"
-    subnet_id = azurerm_subnet.appgw.id
+    subnet_id = azurerm_subnet.subnet_agw.id
   }
 
   frontend_ip_configuration {
@@ -497,5 +518,10 @@ resource "azurerm_application_gateway" "appgw" {
     url_path_map_name  = "url-path-map"
     priority           = 100
   }
-}
 
+  depends_on = [
+    azurerm_public_ip.appgw_ip,
+    azurerm_private_endpoint.backend_pe,
+    azurerm_private_endpoint.frontend_pe
+  ]
+}
