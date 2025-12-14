@@ -100,7 +100,7 @@ resource "azurerm_service_plan" "plan_backend" {
 }
 
 # ============================================================
-# 1.0 - APP SERVICE BACKEND
+# 1.0 - Backend App Service (Linux, PHP)
 # ============================================================
 
 resource "azurerm_linux_web_app" "backend" {
@@ -243,24 +243,6 @@ resource "azurerm_storage_account" "storage" {
 }
 
 # ============================================================
-# 1.4 - PRIVATE ENDPOINTS
-# ============================================================
-
-resource "azurerm_private_endpoint" "pe_sql" {
-  name                = "pe-sql"
-  location            = var.location
-  resource_group_name = azurerm_resource_group.rg.name
-  subnet_id           = azurerm_subnet.subnet_pe.id
-
-  private_service_connection {
-    name                           = "sql-connection"
-    private_connection_resource_id = azurerm_mssql_server.sql_server.id
-    subresource_names              = ["sqlServer"]
-    is_manual_connection           = false
-  }
-}
-
-# ============================================================
 # APP SERVICE PLAN (FRONTEND)
 # ============================================================
 
@@ -293,3 +275,227 @@ resource "azurerm_windows_web_app" "frontend" {
     WEBSITE_NODE_DEFAULT_VERSION = "~22"
   }
 }
+
+# =================================================================================
+# Private Endpoints
+# ================================================================================
+resource "azurerm_private_endpoint" "backend_pe" {
+  name                = "pe-backend"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  subnet_id           = azurerm_subnet.privateend.id
+
+  private_service_connection {
+    name                           = "backend-connection"
+    private_connection_resource_id = azurerm_linux_web_app.backend.id
+    subresource_names              = ["sites"]
+    is_manual_connection           = false
+  }
+
+  depends_on = [
+    azurerm_subnet.privateend,
+    azurerm_linux_web_app.backend
+  ]
+}
+
+resource "azurerm_private_endpoint" "frontend_pe" {
+  name                = "pe-frontend"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  subnet_id           = azurerm_subnet.privateend.id
+
+  private_service_connection {
+    name                           = "frontend-connection"
+    private_connection_resource_id = azurerm_windows_web_app.frontend.id
+    subresource_names              = ["sites"]
+    is_manual_connection           = false
+  }
+
+  depends_on = [
+    azurerm_subnet.privateend,
+    azurerm_windows_web_app.frontend
+  ]
+}
+
+resource "azurerm_private_endpoint" "sql_pe" {
+  name                = "pe-sqlserver1"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  subnet_id           = azurerm_subnet.sql.id
+
+  private_service_connection {
+    name                           = "sqlserver1-connection"
+    private_connection_resource_id = azurerm_mssql_server.sql_server.id
+    subresource_names              = ["sqlServer"]
+    is_manual_connection           = false
+  }
+
+  depends_on = [
+    azurerm_subnet.sql,
+    azurerm_mssql_server.sql_server
+  ]
+}
+
+resource "azurerm_private_endpoint" "keyvault_pe" {
+  name                = "pe-keyvault"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  subnet_id           = azurerm_subnet.keyvault.id
+
+  private_service_connection {
+    name                           = "keyvault-connection"
+    private_connection_resource_id = "/subscriptions/${data.azurerm_subscription.primary.subscription_id}/resourceGroups/${var.resource_group_name}/providers/Microsoft.KeyVault/vaults/${var.key_vault_name}"
+    subresource_names              = ["vault"]
+    is_manual_connection           = false
+  }
+
+  depends_on = [
+    azurerm_subnet.keyvault,
+    azurerm_virtual_network.vnet
+  ]
+}
+
+resource "azurerm_private_endpoint" "blob_pe" {
+  name                = "pe-blobstorage"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  subnet_id           = azurerm_subnet.blobstorage.id
+
+  private_service_connection {
+    name                           = "blob-connection"
+    private_connection_resource_id = "/subscriptions/${data.azurerm_subscription.primary.subscription_id}/resourceGroups/${var.resource_group_name}/providers/Microsoft.Storage/storageAccounts/${var.storage_account_name}"
+    subresource_names              = ["blob"]
+    is_manual_connection           = false
+  }
+
+  depends_on = [
+    azurerm_subnet.blobstorage,
+    azurerm_virtual_network.vnet
+  ]
+}
+
+resource "azurerm_application_gateway" "appgw" {
+  name                = "dojo-appgw"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+
+  sku {
+    name     = "Standard_v2"
+    tier     = "Standard_v2"
+    capacity = 2
+  }
+
+  gateway_ip_configuration {
+    name      = "appgw-ip-config"
+    subnet_id = azurerm_subnet.appgw.id
+  }
+
+  frontend_ip_configuration {
+    name                 = "appgw-frontend-ip"
+    public_ip_address_id = azurerm_public_ip.appgw_ip.id
+  }
+
+  frontend_port {
+    name = "frontendPort443"
+    port = 443
+  }
+
+  ssl_certificate {
+    name     = "cert-app-dojo"
+    data     = var.cert_data
+    password = var.cert_password
+  }
+
+  http_listener {
+    name                           = "listener-https"
+    frontend_ip_configuration_name = "appgw-frontend-ip"
+    frontend_port_name             = "frontendPort443"
+    protocol                       = "Https"
+    ssl_certificate_name           = "cert-app-dojo"
+  }
+
+  backend_address_pool {
+    name         = "pool-backend"
+    ip_addresses = [azurerm_private_endpoint.backend_pe.private_service_connection[0].private_ip_address]
+  }
+
+  backend_address_pool {
+    name         = "pool-frontend"
+    ip_addresses = [azurerm_private_endpoint.frontend_pe.private_service_connection[0].private_ip_address]
+  }
+
+  backend_http_settings {
+    name                  = "setting-backend"
+    port                  = 443
+    protocol              = "Https"
+    request_timeout       = 20
+    probe_name            = "probe-backend"
+    host_name             = "api-backend-dojo.azurewebsites.net"
+    cookie_based_affinity = "Disabled"
+  }
+
+  backend_http_settings {
+    name                  = "setting-frontend"
+    port                  = 443
+    protocol              = "Https"
+    request_timeout       = 20
+    probe_name            = "probe-frontend"
+    host_name             = "front22.azurewebsites.net"
+    cookie_based_affinity = "Disabled"
+  }
+
+  probe {
+    name                 = "probe-backend"
+    protocol             = "Https"
+    host                 = "api-backend-dojo.azurewebsites.net"
+    path                 = "/api/alumnos"
+    interval             = 30
+    timeout              = 30
+    unhealthy_threshold  = 3
+    match {
+      status_code = ["200-399"]
+    }
+  }
+
+  probe {
+    name                 = "probe-frontend"
+    protocol             = "Https"
+    host                 = "front22.azurewebsites.net"
+    path                 = "/"
+    interval             = 30
+    timeout              = 30
+    unhealthy_threshold  = 3
+    match {
+      status_code = ["200-399"]
+    }
+  }
+
+  url_path_map {
+    name                               = "url-path-map"
+    default_backend_address_pool_name  = "pool-frontend"
+    default_backend_http_settings_name = "setting-frontend"
+
+    path_rule {
+      name                       = "frontend-rule"
+      paths                      = ["/web/*"]
+      backend_address_pool_name  = "pool-frontend"
+      backend_http_settings_name = "setting-frontend"
+    }
+
+    path_rule {
+      name                       = "backend-rule"
+      paths                      = ["/api/*"]
+      backend_address_pool_name  = "pool-backend"
+      backend_http_settings_name = "setting-backend"
+    }
+  }
+
+  request_routing_rule {
+    name               = "rule-path-routing"
+    rule_type          = "PathBasedRouting"
+    http_listener_name = "listener-https"
+    url_path_map_name  = "url-path-map"
+    priority           = 100
+  }
+}
+
