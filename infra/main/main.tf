@@ -161,24 +161,34 @@ resource "azurerm_key_vault" "kv" {
 # ROLES
 # ------------------------------------------------------------
 
+# GitHub Actions - Puede crear/modificar secrets en CI/CD
 resource "azurerm_role_assignment" "github_kv_secrets" {
   scope                = azurerm_key_vault.kv.id
   role_definition_name = "Key Vault Secrets Officer"
   principal_id         = var.github_principal_id
 }
 
+# Tu usuario - Administración completa del Key Vault
 resource "azurerm_role_assignment" "user_kv_admin" {
   scope                = azurerm_key_vault.kv.id
   role_definition_name = "Key Vault Administrator"
   principal_id         = var.admin_user_object_id
 }
 
-# Espera propagación
+# ✅ NUEVO - Backend App Service - Puede leer secrets en runtime
+resource "azurerm_role_assignment" "backend_kv_secrets" {
+  scope                = azurerm_key_vault.kv.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_linux_web_app.backend.identity[0].principal_id
+}
+
+# Espera propagación de permisos RBAC
 resource "time_sleep" "wait_for_iam" {
   create_duration = "45s"
   depends_on = [
     azurerm_role_assignment.github_kv_secrets,
-    azurerm_role_assignment.user_kv_admin
+    azurerm_role_assignment.user_kv_admin,
+    azurerm_role_assignment.backend_kv_secrets
   ]
 }
 
@@ -390,21 +400,15 @@ resource "azurerm_private_endpoint" "blob_pe" {
     azurerm_storage_account.storage
   ]
 }
-# ======================
+
+# =================================================================================
 # Application Gateway
-# ======================
-resource "azurerm_public_ip" "appgw_ip" {
-  name                = "appgw-publicip"
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  allocation_method   = "Static"
-  sku                 = "Standard"
-}
+# ================================================================================
 
 resource "azurerm_application_gateway" "appgw" {
   name                = "dojo-appgw"
   location            = var.location
-  resource_group_name = var.resource_group_name
+  resource_group_name = azurerm_resource_group.rg.name
 
   sku {
     name     = "Standard_v2"
@@ -414,7 +418,7 @@ resource "azurerm_application_gateway" "appgw" {
 
   gateway_ip_configuration {
     name      = "appgw-ip-config"
-    subnet_id = azurerm_subnet.appgw.id
+    subnet_id = azurerm_subnet.subnet_agw.id
   }
 
   frontend_ip_configuration {
@@ -429,7 +433,7 @@ resource "azurerm_application_gateway" "appgw" {
 
   ssl_certificate {
     name     = "cert-app-dojo"
-    data     = filebase64("${path.module}/certs/app-dojo.com.pfx")
+    data     = var.cert_data
     password = var.cert_password
   }
 
@@ -439,7 +443,6 @@ resource "azurerm_application_gateway" "appgw" {
     frontend_port_name             = "frontendPort443"
     protocol                       = "Https"
     ssl_certificate_name           = "cert-app-dojo"
-    require_sni                    = false
   }
 
   backend_address_pool {
@@ -453,51 +456,47 @@ resource "azurerm_application_gateway" "appgw" {
   }
 
   backend_http_settings {
-    name                                = "setting-backend"
-    port                                = 443
-    protocol                            = "Https"
-    request_timeout                     = 20
-    cookie_based_affinity               = "Disabled"
-    probe_name                          = "probe-backend"
-    host_name                           = "api-backend-dojo.azurewebsites.net"
-    pick_host_name_from_backend_address = false
+    name                  = "setting-backend"
+    port                  = 443
+    protocol              = "Https"
+    request_timeout       = 20
+    probe_name            = "probe-backend"
+    host_name             = "api-backend-dojo.azurewebsites.net"
+    cookie_based_affinity = "Disabled"
   }
 
   backend_http_settings {
-    name                                = "setting-frontend"
-    port                                = 443
-    protocol                            = "Https"
-    request_timeout                     = 20
-    cookie_based_affinity               = "Disabled"
-    probe_name                          = "probe-frontend"
-    host_name                           = "front22.azurewebsites.net"
-    pick_host_name_from_backend_address = false
+    name                  = "setting-frontend"
+    port                  = 443
+    protocol              = "Https"
+    request_timeout       = 20
+    probe_name            = "probe-frontend"
+    host_name             = "front22.azurewebsites.net"
+    cookie_based_affinity = "Disabled"
   }
 
   probe {
-    name                = "probe-backend"
-    protocol            = "Https"
-    host                = "api-backend-dojo.azurewebsites.net"
-    path                = "/api/alumnos"
-    interval            = 30
-    timeout             = 30
-    unhealthy_threshold = 3
+    name                 = "probe-backend"
+    protocol             = "Https"
+    host                 = "api-backend-dojo.azurewebsites.net"
+    path                 = "/api/alumnos"
+    interval             = 30
+    timeout              = 30
+    unhealthy_threshold  = 3
     match {
-      body        = ""
       status_code = ["200-399"]
     }
   }
 
   probe {
-    name                = "probe-frontend"
-    protocol            = "Https"
-    host                = "front22.azurewebsites.net"
-    path                = "/"
-    interval            = 30
-    timeout             = 30
-    unhealthy_threshold = 3
+    name                 = "probe-frontend"
+    protocol             = "Https"
+    host                 = "front22.azurewebsites.net"
+    path                 = "/"
+    interval             = 30
+    timeout              = 30
+    unhealthy_threshold  = 3
     match {
-      body        = ""
       status_code = ["200-399"]
     }
   }
@@ -529,13 +528,5 @@ resource "azurerm_application_gateway" "appgw" {
     url_path_map_name  = "url-path-map"
     priority           = 100
   }
-}
 
-# ======================
-# Role Assignment - Key Vault (Backend)
-# ======================
-resource "azurerm_role_assignment" "backend_kv" {
-  scope                = "/subscriptions/${data.azurerm_subscription.primary.subscription_id}/resourceGroups/${var.resource_group_name}/providers/Microsoft.KeyVault/vaults/${var.key_vault_name}"
-  role_definition_name = "Key Vault Secrets User"
-  principal_id         = azurerm_linux_web_app.backend.identity[0].principal_id
 }
